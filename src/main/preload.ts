@@ -18,6 +18,7 @@ const CH = {
   BOT_STATE_CHANGE: 'bot:state-change',
   BOT_LOG:          'bot:log',
   ALL_DONE:         'run:all-done',
+  ROUND_UPDATE:     'run:round-update',
   OPEN_DRAWER:      'open-drawer-for-bot',
 } as const;
 
@@ -48,6 +49,10 @@ try {
 
     onAllDone: (cb: () => void) => {
       ipcRenderer.on(CH.ALL_DONE, () => cb());
+    },
+
+    onRoundUpdate: (cb: (data: { currentRound: number; totalRounds: number }) => void) => {
+      ipcRenderer.on(CH.ROUND_UPDATE, (_event, data) => cb(data));
     },
 
     // Open drawer request forwarded from a BrowserView via main process

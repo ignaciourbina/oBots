@@ -12,6 +12,7 @@ interface OtreeBotsApi {
   onBotStateChange: (cb: (data: { id: string; index: number; state: string }) => void) => void;
   onBotLog: (cb: (data: { id: string; index: number; entry: LogEntry }) => void) => void;
   onAllDone: (cb: () => void) => void;
+  onRoundUpdate: (cb: (data: { currentRound: number; totalRounds: number }) => void) => void;
   onOpenDrawer: (cb: (data: { id: string; index: number }) => void) => void;
   sendCommand: (cmd: string, payload?: unknown) => void;
 }
@@ -33,6 +34,7 @@ interface StartCommandPayload {
   url: string;
   playerCount: number;
   strategy: StrategyPayload;
+  repeatRounds: number;
 }
 
 interface GridLayout {
@@ -82,6 +84,8 @@ const botLogs: Map<string, DrawerLogEntry[]> = new Map();
 let drawerActiveTab = '';
 /** Whether the drawer is currently open */
 let drawerOpen = false;
+let repeatCurrentRound = 0;
+let repeatTotalRounds = 1;
 
 // ── DOM References ──────────────────────────────────────────
 
@@ -108,6 +112,7 @@ const stratSpeedLabel = document.getElementById('strat-speed-label') as HTMLSpan
 const stratJitterSlider = document.getElementById('strat-jitter') as HTMLInputElement;
 const stratJitterLabel = document.getElementById('strat-jitter-label') as HTMLSpanElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
+const setupRepeatInput = document.getElementById('setup-repeat') as HTMLInputElement;
 
 // ── Log Drawer DOM References ───────────────────────────────
 const logDrawer = document.getElementById('log-drawer') as HTMLDivElement;
@@ -201,6 +206,8 @@ function showLaunchingState(): void {
  */
 function resetToSetupScreen(): void {
   runRequested = false;
+  repeatCurrentRound = 0;
+  repeatTotalRounds = 1;
 
   finishedCount = 0;
   totalCount = 0;
@@ -242,7 +249,7 @@ function readSetupPayload(): StartCommandPayload | null {
   }
 
   showSetupError('');
-  return { url, playerCount, strategy: readStrategy() };
+  return { url, playerCount, strategy: readStrategy(), repeatRounds: Number(setupRepeatInput.value) || 1 };
 }
 
 /**
@@ -329,8 +336,15 @@ function updateToolbarStatus(): void {
 }
 
 function handleAllDone(): void {
-  toolbarStatus.textContent = `✓ All ${totalCount} bots finished`;
-  toolbarStatus.style.color = '#4caf50';
+  if (repeatCurrentRound < repeatTotalRounds) {
+    // More rounds coming — main process handles the restart
+    toolbarStatus.textContent = `Round ${repeatCurrentRound}/${repeatTotalRounds} complete — starting next…`;
+    toolbarStatus.style.color = '#ffb300';
+  } else {
+    const roundLabel = repeatTotalRounds > 1 ? ` (${repeatTotalRounds} rounds)` : '';
+    toolbarStatus.textContent = `\u2713 All ${totalCount} bots finished${roundLabel}`;
+    toolbarStatus.style.color = '#4caf50';
+  }
   updateOverviewButton();
 }
 
@@ -650,6 +664,27 @@ if (!api) {
   api.onAllDone(() => {
     console.log('[renderer] run:all-done received');
     handleAllDone();
+  });
+
+  api.onRoundUpdate((data: { currentRound: number; totalRounds: number }) => {
+    console.log(`[renderer] run:round-update ${data.currentRound}/${data.totalRounds}`);
+    repeatCurrentRound = data.currentRound;
+    repeatTotalRounds = data.totalRounds;
+    if (data.totalRounds > 1) {
+      toolbarStatus.textContent = `Round ${data.currentRound}/${data.totalRounds} running…`;
+      toolbarStatus.style.color = '';
+    }
+    // Reset state for the new round — clear stale bot data from previous round
+    if (data.currentRound > 1) {
+      finishedCount = 0;
+      totalCount = 0;
+      botCards.clear();
+      botLogs.clear();
+      drawerActiveTab = '';
+      toggleDrawer(false);
+      refreshDrawerTabs();
+      renderDrawerBody();
+    }
   });
 
   // Open drawer when requested from a BrowserView (bot tile click)

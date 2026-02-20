@@ -73,8 +73,9 @@ export class StateMachineRunner {
     }
   }
 
-  /** Stop the FSM permanently. */
+  /** Stop the FSM permanently (idempotent — no-op if already finished). */
   stop(): void {
+    if (this._status === 'done' || this._status === 'error') return;
     this._status = 'done';
     this.callbacks.onStatusChange(this.botId, 'done');
   }

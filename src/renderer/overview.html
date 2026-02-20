@@ -513,6 +513,9 @@
       const finished = Number(snapshot?.finishedBots || 0);
       const runStartedAt = snapshot?.runStartedAt || null;
       const elapsed = runStartedAt ? fmtDuration(Date.now() - Number(runStartedAt)) : '00:00:00';
+      const currentRound = Number(snapshot?.currentRound || 0);
+      const totalRounds = Number(snapshot?.totalRounds || 1);
+      const roundLabel = totalRounds > 1 ? ` \u2014 Round ${currentRound}/${totalRounds}` : '';
 
       const status = { running: 0, done: 0, paused: 0, error: 0, idle: 0 };
       const states = {};
@@ -540,7 +543,7 @@
       progressFill.style.width = `${completion}%`;
 
       const ts = new Date(snapshot?.timestamp || Date.now());
-      meta.textContent = `Updated ${ts.toLocaleTimeString()}`;
+      meta.textContent = `Updated ${ts.toLocaleTimeString()}${roundLabel}`;
       setHealth({ expected: completionBase, finished, errors: status.error, waiting });
 
       statusRows.innerHTML = asList({

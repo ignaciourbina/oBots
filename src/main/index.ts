@@ -17,6 +17,16 @@ import { createAutoPlayer } from '../scripts/auto-player';
 
 const log = createChildLogger('main');
 
+// ── Linux sandbox fix ───────────────────────────────────────
+// Packaged Electron on Linux (deb/AppImage) triggers SIGTRAP if
+// the chrome-sandbox helper lacks SUID permissions.  Disable the
+// Chromium sandbox at the process level — safe for a local-only
+// research/automation tool.
+app.commandLine.appendSwitch('no-sandbox');
+// Fallback: some GPU drivers cause crashes in the GPU process;
+// using the software rasterizer avoids that.
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+
 // ── Globals ─────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null;
@@ -31,12 +41,18 @@ let layoutRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let runStartedAt: number | null = null;
 let overviewWindow: BrowserWindow | null = null;
 let overviewTimer: ReturnType<typeof setInterval> | null = null;
+let repeatCurrentRound = 0;
+let repeatTotalRounds = 1;
+let lastRunConfig: AppConfig | null = null;
+let isRepeating = false;
 
 interface OverviewSnapshot {
   timestamp: number;
   expectedBots: number;
   finishedBots: number;
   runStartedAt: number | null;
+  currentRound: number;
+  totalRounds: number;
   bots: Array<{
     id: string;
     index: number;
@@ -137,7 +153,7 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
     throw new Error('Player count must be an integer >= 1.');
   }
 
-  return { url, playerCount, strategy: payload.strategy };
+  return { url, playerCount, strategy: payload.strategy, repeatRounds: payload.repeatRounds };
 }
 
 /**
@@ -217,20 +233,84 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           actionJitterMs: Number(start.strategy.actionJitterMs) || 0,
         }
       : baseConfig.strategy;
-    await launchBots({
+    const runConfig: AppConfig = {
       ...baseConfig,
       url: start.url,
       playerCount: start.playerCount,
       strategy,
-    });
+    };
+
+    // Repeat rounds setup
+    repeatTotalRounds = Math.max(1, Number(start.repeatRounds) || 1);
+    repeatCurrentRound = 1;
+    lastRunConfig = runConfig;
+
+    log.info('Starting run — round %d/%d', repeatCurrentRound, repeatTotalRounds);
+    await launchBots(runConfig);
     runStarted = true;
     runStartedAt = Date.now();
     sendOverviewSnapshot();
+    sendRoundUpdate();
   } catch (err) {
     runStarted = false;
     throw err;
   } finally {
     runStarting = false;
+  }
+}
+
+/**
+ * Send round progress to the renderer.
+ */
+function sendRoundUpdate(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IpcChannel.ROUND_UPDATE, {
+      currentRound: repeatCurrentRound,
+      totalRounds: repeatTotalRounds,
+    });
+  }
+}
+
+/**
+ * Automatically start the next repeat round after all bots finish.
+ */
+async function handleRepeatRound(): Promise<void> {
+  if (!lastRunConfig || repeatCurrentRound >= repeatTotalRounds) {
+    log.info('All %d rounds completed', repeatTotalRounds);
+    return;
+  }
+
+  log.info('Round %d/%d complete — starting next round…', repeatCurrentRound, repeatTotalRounds);
+
+  // Tear down current round
+  await botRunner.stopAll();
+  currentPlayerCount = 0;
+
+  // Brief pause to let oTree server process the completed session
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  // Bail if a restart/stop occurred during the pause
+  if (!lastRunConfig) {
+    log.info('Repeat cancelled (lastRunConfig cleared during pause)');
+    return;
+  }
+
+  repeatCurrentRound++;
+  sendRoundUpdate();
+
+  // Re-launch identical run
+  log.info('Launching round %d/%d', repeatCurrentRound, repeatTotalRounds);
+  try {
+    await launchBots(lastRunConfig);
+    runStartedAt = Date.now();
+    sendOverviewSnapshot();
+  } catch (err) {
+    log.error('Failed to launch repeat round %d: %s', repeatCurrentRound, err instanceof Error ? err.message : String(err));
+    // Reset to allow the user to restart manually
+    repeatCurrentRound = repeatTotalRounds; // prevent further repeats
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannel.ALL_DONE);
+    }
   }
 }
 
@@ -249,6 +329,10 @@ async function handleRestartRequest(): Promise<void> {
     currentPlayerCount = 0;
     runStarted = false;
     runStartedAt = null;
+    repeatCurrentRound = 0;
+    repeatTotalRounds = 1;
+    lastRunConfig = null;
+    isRepeating = false;
     sendOverviewSnapshot();
     log.info('Run stopped and reset. Ready for new start request.');
   } finally {
@@ -290,6 +374,8 @@ function buildOverviewSnapshot(): OverviewSnapshot {
     expectedBots: currentPlayerCount,
     finishedBots,
     runStartedAt,
+    currentRound: repeatCurrentRound,
+    totalRounds: repeatTotalRounds,
     bots,
   };
 }
@@ -369,6 +455,22 @@ app.whenReady().then(async () => {
     registry = new SessionRegistry();
     botRunner = new BotRunner(mainWindow, registry, baseConfig.delayMultiplier);
     botRunner.setGridManager(gridManager);
+
+    // Wire repeat-round logic: when all bots finish, start next round if needed.
+    // Guard with isRepeating to prevent re-entrant calls: stopAll() triggers
+    // onStatusChange → allFinished() → allDoneCallback, which would recurse.
+    botRunner.setAllDoneCallback(() => {
+      if (!isRepeating && repeatCurrentRound < repeatTotalRounds) {
+        isRepeating = true;
+        void handleRepeatRound()
+          .catch((err) => {
+            log.error('Repeat round failed: %s', err instanceof Error ? err.message : String(err));
+          })
+          .finally(() => {
+            isRepeating = false;
+          });
+      }
+    });
 
     registerIpcHandlers(botRunner, handleStartRequest, handleRestartRequest);
 

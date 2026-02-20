@@ -75,7 +75,7 @@ describe('ipc-handlers', () => {
   it('removes all registered listeners', () => {
     removeIpcHandlers();
 
-    expect(ipcMainMock.removeAllListeners).toHaveBeenCalledTimes(8);
+    expect(ipcMainMock.removeAllListeners).toHaveBeenCalledTimes(9);
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_START);
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_STOP);
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_RESTART);
@@ -84,5 +84,6 @@ describe('ipc-handlers', () => {
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_FOCUS);
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_OPEN_DRAWER);
     expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_DRAWER_TOGGLE);
+    expect(ipcMainMock.removeAllListeners).toHaveBeenCalledWith(IpcChannel.CMD_OVERVIEW_TOGGLE);
   });
 });

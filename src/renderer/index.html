@@ -22,6 +22,10 @@
       <label class="setup-card__label" for="setup-players">Number of bots</label>
       <input id="setup-players" class="setup-card__input" type="number" min="1" step="1" required />
 
+      <label class="setup-card__label" for="setup-repeat">Repeat rounds</label>
+      <input id="setup-repeat" class="setup-card__input" type="number" min="1" step="1" value="1" title="Number of consecutive identical runs (1 = single run)" />
+      <span class="strategy-grid__hint" style="display:block; margin-top:2px;">Auto-restart with identical settings when all bots finish (1 = single run)</span>
+
       <label class="setup-card__label" for="setup-strategy">Strategy preset</label>
       <select id="setup-strategy" class="setup-card__input">
         <option value="random">Random</option>

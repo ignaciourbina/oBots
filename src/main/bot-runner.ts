@@ -35,6 +35,7 @@ export class BotRunner {
   private focusSessions: Map<string, FocusSession> = new Map();
   private readonly syslog = createChildLogger('bot-runner');
   private gridManager: GridManager | null = null;
+  private allDoneCallback: (() => void) | null = null;
 
   constructor(
     private readonly win: BrowserWindow,
@@ -48,6 +49,14 @@ export class BotRunner {
    */
   setGridManager(gm: GridManager): void {
     this.gridManager = gm;
+  }
+
+  /**
+   * Register a callback that fires when all bots finish.
+   * Used by the main process for repeat-round logic.
+   */
+  setAllDoneCallback(cb: (() => void) | null): void {
+    this.allDoneCallback = cb;
   }
 
   /** Send IPC to the main window, guarding against a destroyed window during shutdown. */
@@ -159,6 +168,7 @@ export class BotRunner {
         // Check if all bots finished
         if (this.registry.allFinished()) {
           this.safeSend(IpcChannel.ALL_DONE);
+          this.allDoneCallback?.();
         }
       },
       onError: (botId, error) => {

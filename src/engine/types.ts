@@ -172,6 +172,7 @@ export enum IpcChannel {
   BOT_LOG          = 'bot:log',
   BOT_SCREENSHOT   = 'bot:screenshot',
   ALL_DONE         = 'run:all-done',
+  ROUND_UPDATE     = 'run:round-update',
 
   // Renderer → Main
   CMD_START        = 'cmd:start',

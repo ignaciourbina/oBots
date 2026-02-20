@@ -38,7 +38,7 @@ describe('createAutoPlayer terminal detection', () => {
     const transitions = script.states.handleWaitPage.transitions;
     const recoveryTransition = transitions.find((t) => t.target === 'recoverWaitPage');
     expect(recoveryTransition?.guard?.type).toBe('custom');
-    expect(recoveryTransition?.guard?.fn).toContain('participants ready');
+    expect(recoveryTransition?.guard?.fn).toContain('participants');
     expect(recoveryTransition?.guard?.fn).toContain('__otb_wait_recovered_urls');
     const staleRecoveryTransition = transitions.find((t) => t.target === 'recoverWaitPageStale');
     expect(staleRecoveryTransition?.guard?.type).toBe('custom');

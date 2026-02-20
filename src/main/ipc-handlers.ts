@@ -29,6 +29,7 @@ export interface StartPayload {
   url: string;
   playerCount: number;
   strategy?: StrategyPayload;
+  repeatRounds?: number;
 }
 
 /**
