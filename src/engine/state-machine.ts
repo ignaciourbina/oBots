@@ -1,0 +1,221 @@
+// src/engine/state-machine.ts
+// ──────────────────────────────────────────────────────────────
+// FSM interpreter — pure engine that takes a BotScript + Page
+// and runs until a terminal state is reached or an error occurs.
+// No knowledge of Electron, grid, or oTree specifics.
+// ──────────────────────────────────────────────────────────────
+
+import type { Page } from 'puppeteer';
+import {
+  BotScript,
+  BotStatus,
+  DEFAULTS,
+  LogEntry,
+  Transition,
+} from './types';
+import { executeAction, sleep } from './actions';
+import { evaluateGuard } from './conditions';
+
+// ── Event emitter callback types ────────────────────────────
+
+export interface FSMCallbacks {
+  onStateChange: (botId: string, newState: string) => void;
+  onLog: (botId: string, entry: LogEntry) => void;
+  onStatusChange: (botId: string, status: BotStatus) => void;
+  onError: (botId: string, error: Error) => void;
+}
+
+// ── FSM Runner ──────────────────────────────────────────────
+
+export class StateMachineRunner {
+  private _status: BotStatus = 'idle';
+  private _currentState: string;
+  private readonly actionDelayMs: number;
+
+  constructor(
+    private readonly botId: string,
+    private readonly script: BotScript,
+    private readonly page: Page,
+    private readonly callbacks: FSMCallbacks,
+    private readonly delayMultiplier: number = 1.0,
+    actionDelayMs: number = 0,
+  ) {
+    this._currentState = script.initialState;
+    this.actionDelayMs = actionDelayMs;
+  }
+
+  get status(): BotStatus {
+    return this._status;
+  }
+
+  get currentState(): string {
+    return this._currentState;
+  }
+
+  /** Pause the FSM loop. Active action will finish before pausing. */
+  pause(): void {
+    if (this._status === 'running') {
+      this._status = 'paused';
+      this.callbacks.onStatusChange(this.botId, 'paused');
+    }
+  }
+
+  /** Resume a paused FSM. */
+  resume(): void {
+    if (this._status === 'paused') {
+      this._status = 'running';
+      this.callbacks.onStatusChange(this.botId, 'running');
+      // Re-enter the run loop
+      this.runLoop().catch((err) => this.handleError(err));
+    }
+  }
+
+  /** Stop the FSM permanently. */
+  stop(): void {
+    this._status = 'done';
+    this.callbacks.onStatusChange(this.botId, 'done');
+  }
+
+  /**
+   * Start the FSM execution loop.
+   * Resolves when the FSM reaches a final state, errors, or is stopped.
+   */
+  async run(): Promise<void> {
+    this._status = 'running';
+    this.callbacks.onStatusChange(this.botId, 'running');
+
+    try {
+      await this.runLoop();
+    } catch (err) {
+      this.handleError(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+
+  // ── internal ──────────────────────────────────────────
+
+  private async runLoop(): Promise<void> {
+    while (this._status === 'running') {
+      const stateDef = this.script.states[this._currentState];
+      if (!stateDef) {
+        throw new Error(`Unknown state: "${this._currentState}" in script "${this.script.name}"`);
+      }
+
+      // 1. Execute onEntry actions sequentially
+      for (const action of stateDef.onEntry) {
+        if (this._status !== 'running') return; // check between actions
+
+        // Log every action execution to the system logger
+        const actionDesc = action.selector
+          ? `${action.type}(${action.selector}${action.value != null ? ', ' + JSON.stringify(action.value) : ''})`
+          : `${action.type}${action.value != null ? '(' + JSON.stringify(action.value) + ')' : ''}`;
+        this.callbacks.onLog(this.botId, {
+          timestamp: Date.now(),
+          level: 'info',
+          message: `[${this._currentState}] ${actionDesc}`,
+        });
+
+        try {
+          const logEntry = await executeAction(this.page, action, this.delayMultiplier);
+          if (logEntry) {
+            this.callbacks.onLog(this.botId, logEntry);
+          }
+        } catch (actionErr) {
+          // Log the error but don't crash — let transitions decide
+          const entry: LogEntry = {
+            timestamp: Date.now(),
+            level: 'error',
+            message: `Action ${action.type} failed: ${actionErr instanceof Error ? actionErr.message : String(actionErr)}`,
+          };
+          this.callbacks.onLog(this.botId, entry);
+
+          // Try to capture a screenshot on error
+          try {
+            const buf = await this.page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 40 });
+            entry.screenshotDataUrl = `data:image/jpeg;base64,${buf}`;
+          } catch {
+            // screenshot also failed, continue
+          }
+        }
+
+        // Inter-action delay so interactions are visible in screencast
+        if (this.actionDelayMs > 0 && action.type !== 'wait' && action.type !== 'log') {
+          await sleep(this.actionDelayMs);
+        }
+      }
+
+      // 2. If this is a final state → done
+      if (stateDef.final) {
+        this._status = 'done';
+        this.callbacks.onStatusChange(this.botId, 'done');
+        this.callbacks.onLog(this.botId, {
+          timestamp: Date.now(),
+          level: 'info',
+          message: `Reached final state: "${this._currentState}"`,
+        });
+        return;
+      }
+
+      // 3. Poll transitions until one matches
+      const nextState = await this.pollTransitions(stateDef.transitions);
+
+      if (this._status !== 'running') return; // could have been paused/stopped
+
+      // 4. Transition
+      this._currentState = nextState;
+      this.callbacks.onStateChange(this.botId, nextState);
+    }
+  }
+
+  /**
+   * Continuously evaluate transition guards until one passes.
+   * Respects maxPollTime to prevent infinite loops.
+   */
+  private async pollTransitions(transitions: Transition[]): Promise<string> {
+    const startTime = Date.now();
+
+    while (this._status === 'running') {
+      for (const t of transitions) {
+        // If no guard, the transition fires immediately
+        if (!t.guard) {
+          return t.target;
+        }
+
+        try {
+          const passes = await evaluateGuard(this.page, t.guard);
+          if (passes) {
+            return t.target;
+          }
+        } catch {
+          // Guard evaluation failed — skip this transition
+        }
+      }
+
+      // Check timeout
+      const elapsed = Date.now() - startTime;
+      if (elapsed > DEFAULTS.maxPollTimeMs) {
+        throw new Error(
+          `Transition timeout after ${DEFAULTS.maxPollTimeMs}ms in state "${this._currentState}". ` +
+          `No matching guard found among ${transitions.length} transitions.`,
+        );
+      }
+
+      // Wait before next poll cycle
+      const pollDelay = transitions[0]?.delay ?? DEFAULTS.pollIntervalMs;
+      await sleep(pollDelay);
+    }
+
+    // Unreachable unless paused/stopped, but TypeScript needs a return
+    return this._currentState;
+  }
+
+  private handleError(err: Error): void {
+    this._status = 'error';
+    this.callbacks.onError(this.botId, err);
+    this.callbacks.onStatusChange(this.botId, 'error');
+    this.callbacks.onLog(this.botId, {
+      timestamp: Date.now(),
+      level: 'error',
+      message: `FSM error: ${err.message}`,
+    });
+  }
+}

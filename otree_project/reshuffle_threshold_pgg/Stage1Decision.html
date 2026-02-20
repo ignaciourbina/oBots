@@ -1,0 +1,13 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Stage 1
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Choose an initial contribution and your belief about the probability of reaching the threshold.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,78 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Results
+{{ endblock }}
+
+{{ block content }}
+    <table class="table table-bordered">
+        <tr>
+            <th>True state this round</th>
+            <td>{{ state_label }}</td>
+        </tr>
+        <tr>
+            <th>Your private signal</th>
+            <td>{{ private_signal_label }}</td>
+        </tr>
+        <tr>
+            <th>Your action</th>
+            <td>{{ your_action_label }}</td>
+        </tr>
+        <tr>
+            <th>Partner action</th>
+            <td>{{ partner_action_label }}</td>
+        </tr>
+        <tr>
+            <th>Base payoff from matrix</th>
+            <td>{{ player.base_payoff }}</td>
+        </tr>
+        <tr>
+            <th>Belief bonus</th>
+            <td>{{ player.belief_bonus }}</td>
+        </tr>
+        <tr>
+            <th>Attention penalty</th>
+            <td>{{ player.attention_penalty }}</td>
+        </tr>
+        <tr>
+            <th>Attention checks correct?</th>
+            <td>{{ if player.attention_correct }}Yes{{ else }}No{{ endif }}</td>
+        </tr>
+        <tr class="table-success">
+            <th>Your payoff this round</th>
+            <td><strong>{{ player.payoff }}</strong></td>
+        </tr>
+    </table>
+
+    {{ if history_rows }}
+        <h5>Recent History</h5>
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Round</th>
+                    <th>Signal</th>
+                    <th>Your Action</th>
+                    <th>Partner Action</th>
+                    <th>Base</th>
+                    <th>Belief Bonus</th>
+                    <th>Attention Penalty</th>
+                    <th>Payoff</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ for row in history_rows }}
+                    <tr>
+                        <td>{{ row.round_number }}</td>
+                        <td>{{ row.signal }}</td>
+                        <td>{{ row.action }}</td>
+                        <td>{{ row.partner_action }}</td>
+                        <td>{{ row.base_payoff }}</td>
+                        <td>{{ row.belief_bonus }}</td>
+                        <td>{{ row.attention_penalty }}</td>
+                        <td>{{ row.payoff }}</td>
+                    </tr>
+                {{ endfor }}
+            </tbody>
+        </table>
+    {{ endif }}
+
+    {{ next_button }}
+{{ endblock }}

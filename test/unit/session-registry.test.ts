@@ -1,0 +1,92 @@
+import { describe, it, expect, vi } from 'vitest';
+import { SessionRegistry } from '../../src/main/session-registry';
+import { BotScript } from '../../src/engine/types';
+
+function makeScript(): BotScript {
+  return {
+    name: 'Test Script',
+    initialState: 'start',
+    states: {
+      start: {
+        onEntry: [{ type: 'log', value: 'hello' }],
+        transitions: [{ target: 'done' }],
+      },
+      done: {
+        onEntry: [],
+        transitions: [],
+        final: true,
+      },
+    },
+  };
+}
+
+describe('SessionRegistry', () => {
+  it('creates bots and updates status/state/logs', () => {
+    const registry = new SessionRegistry();
+    const bot = registry.createBot(0, makeScript());
+
+    expect(registry.size).toBe(1);
+    expect(bot.id).toBeTruthy();
+    expect(bot.currentState).toBe('start');
+    expect(bot.status).toBe('idle');
+
+    registry.updateStatus(bot.id, 'running');
+    registry.updateCurrentState(bot.id, 'done');
+    registry.addLog(bot.id, { timestamp: Date.now(), level: 'info', message: 'ok' });
+
+    const updated = registry.getBot(bot.id);
+    expect(updated?.status).toBe('running');
+    expect(updated?.currentState).toBe('done');
+    expect(updated?.logs).toHaveLength(1);
+  });
+
+  it('computes allFinished only when all are done/error', () => {
+    const registry = new SessionRegistry();
+    const a = registry.createBot(0, makeScript());
+    const b = registry.createBot(1, makeScript());
+
+    expect(registry.allFinished()).toBe(false);
+
+    registry.updateStatus(a.id, 'done');
+    expect(registry.allFinished()).toBe(false);
+
+    registry.setError(b.id, 'boom');
+    expect(registry.allFinished()).toBe(true);
+  });
+
+  it('serializes bots to JSON-safe structure', () => {
+    const registry = new SessionRegistry();
+    const bot = registry.createBot(2, makeScript());
+    registry.setError(bot.id, 'failed');
+
+    const json = registry.toJSON();
+    expect(json).toHaveLength(1);
+    expect(json[0]).toMatchObject({
+      id: bot.id,
+      index: 2,
+      scriptName: 'Test Script',
+      status: 'error',
+      error: 'failed',
+    });
+  });
+
+  it('destroyAll closes open browsers and clears registry', async () => {
+    const registry = new SessionRegistry();
+    const a = registry.createBot(0, makeScript());
+    const b = registry.createBot(1, makeScript());
+
+    const closeA = vi.fn(async () => undefined);
+    const closeB = vi.fn(async () => {
+      throw new Error('close failed');
+    });
+
+    a.browser = { close: closeA } as any;
+    b.browser = { close: closeB } as any;
+
+    await registry.destroyAll();
+
+    expect(closeA).toHaveBeenCalledTimes(1);
+    expect(closeB).toHaveBeenCalledTimes(1);
+    expect(registry.size).toBe(0);
+  });
+});

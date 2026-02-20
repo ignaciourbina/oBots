@@ -1,0 +1,30 @@
+{{ block title }}
+    Reshuffle Threshold PGG — Introduction
+{{ endblock }}
+
+{{ block content }}
+    <div class="card bg-light mb-3">
+        <div class="card-body">
+            <h5 class="card-title">How this stress module works</h5>
+            <p>
+                You are placed in groups of <strong>{{ C.PLAYERS_PER_GROUP }}</strong> and
+                rematched every round for <strong>{{ C.NUM_ROUNDS }} rounds</strong>.
+            </p>
+            <p>
+                In each round:
+            </p>
+            <ol>
+                <li>Stage 1: contribution + belief about reaching threshold.</li>
+                <li>Wait for all group members.</li>
+                <li>Stage 2: revise your contribution after seeing stage-1 aggregate data.</li>
+                <li>Wait for all group members, then payoffs are computed.</li>
+            </ol>
+            <p>
+                If final group contribution reaches <strong>{{ C.THRESHOLD }}</strong>, each player gets
+                coordination bonus <strong>{{ C.COORDINATION_BONUS }}</strong>.
+            </p>
+        </div>
+    </div>
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,41 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Information
+{{ endblock }}
+
+{{ block content }}
+    <div class="alert alert-info">
+        <strong>Your private signal this round:</strong> {{ private_signal_label }}
+    </div>
+
+    <p>
+        Remember: this signal is informative but noisy (correct with probability {{ C.SIGNAL_ACCURACY }}).
+    </p>
+
+    <p>
+        Review the payoff matrix before continuing.
+    </p>
+
+    <table class="table table-bordered table-sm">
+        <thead>
+            <tr>
+                <th>State</th>
+                <th>If both choose Stag</th>
+                <th>If both choose Hare</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th>Good</th>
+                <td>{{ C.STAG_BOTH_GOOD }} each</td>
+                <td>{{ C.HARE_BOTH }} each</td>
+            </tr>
+            <tr>
+                <th>Bad</th>
+                <td>{{ C.STAG_BOTH_BAD }} each</td>
+                <td>{{ C.HARE_BOTH }} each</td>
+            </tr>
+        </tbody>
+    </table>
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,13 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Signal Stage
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Choose a signal from 0 to 100. This signal is used by others to condition their cooperation.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,16 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Make Your Offer
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        You are the <strong>Dictator</strong>. You have {{ C.ENDOWMENT }}.
+    </p>
+    <p>
+        How much will you keep for yourself? The remainder goes to the Receiver.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

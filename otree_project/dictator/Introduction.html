@@ -1,0 +1,25 @@
+{{ block title }}
+    Dictator Game — Introduction
+{{ endblock }}
+
+{{ block content }}
+    <div class="card bg-light mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Welcome!</h5>
+            <p>
+                You are paired with another player.
+                One of you is the <strong>Dictator</strong> (Player 1)
+                and the other is the <strong>Receiver</strong> (Player 2).
+            </p>
+            <p>
+                The Dictator receives <strong>{{ C.ENDOWMENT }}</strong> and decides
+                how much to keep. The rest goes to the Receiver.
+            </p>
+            <p>
+                There are <strong>{{ C.NUM_ROUNDS }} rounds</strong>.
+            </p>
+        </div>
+    </div>
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,14 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Conditional Cooperation Schedule
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Fill your full strategy method schedule: choose how much you would contribute for each
+        possible average signal range of the other players.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,14 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Contribute
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        You have an endowment of <strong>{{ C.ENDOWMENT }}</strong>.
+        How much do you want to contribute to the group fund?
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,27 @@
+{{ block title }}
+    Public Goods Game — Introduction
+{{ endblock }}
+
+{{ block content }}
+    <div class="card bg-light mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Welcome!</h5>
+            <p>
+                You are in a group of <strong>{{ C.PLAYERS_PER_GROUP }} players</strong>.
+            </p>
+            <p>
+                Each round, you will receive an endowment of <strong>{{ C.ENDOWMENT }}</strong> points.
+                You can contribute any amount (0 to {{ C.ENDOWMENT }}) to a group fund.
+            </p>
+            <p>
+                The total group fund will be multiplied by <strong>{{ C.MULTIPLIER }}</strong>
+                and then divided equally among all {{ C.PLAYERS_PER_GROUP }} group members.
+            </p>
+            <p>
+                There are <strong>{{ C.NUM_ROUNDS }} rounds</strong> in total.
+            </p>
+        </div>
+    </div>
+
+    {{ next_button }}
+{{ endblock }}

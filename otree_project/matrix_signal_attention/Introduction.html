@@ -1,0 +1,80 @@
+{{ block title }}
+    Discrete Coordination Game — Introduction
+{{ endblock }}
+
+{{ block content }}
+    <div class="card bg-light mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Round Structure</h5>
+            <p>
+                You will be rematched every round for <strong>{{ C.NUM_ROUNDS }} rounds</strong>.
+            </p>
+            <ol>
+                <li>Read matrix and private-signal information.</li>
+                <li>Complete two attention checks.</li>
+                <li>Report your belief about your partner's action.</li>
+                <li>Choose one discrete action: <strong>Stag</strong> or <strong>Hare</strong>.</li>
+                <li>Wait for your partner and receive results.</li>
+            </ol>
+        </div>
+    </div>
+
+    <h5>Payoff Matrix</h5>
+    <p>
+        The state can be <strong>Good</strong> or <strong>Bad</strong>. You do not observe the true state directly.
+        You receive a private signal that is correct with probability {{ C.SIGNAL_ACCURACY }}.
+    </p>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h6>Good State</h6>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Partner: Stag</th>
+                        <th>Partner: Hare</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th>You: Stag</th>
+                        <td>{{ C.STAG_BOTH_GOOD }}, {{ C.STAG_BOTH_GOOD }}</td>
+                        <td>{{ C.STAG_AGAINST_HARE }}, {{ C.HARE_AGAINST_STAG }}</td>
+                    </tr>
+                    <tr>
+                        <th>You: Hare</th>
+                        <td>{{ C.HARE_AGAINST_STAG }}, {{ C.STAG_AGAINST_HARE }}</td>
+                        <td>{{ C.HARE_BOTH }}, {{ C.HARE_BOTH }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <h6>Bad State</h6>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Partner: Stag</th>
+                        <th>Partner: Hare</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th>You: Stag</th>
+                        <td>{{ C.STAG_BOTH_BAD }}, {{ C.STAG_BOTH_BAD }}</td>
+                        <td>{{ C.STAG_AGAINST_HARE }}, {{ C.HARE_AGAINST_STAG }}</td>
+                    </tr>
+                    <tr>
+                        <th>You: Hare</th>
+                        <td>{{ C.HARE_AGAINST_STAG }}, {{ C.STAG_AGAINST_HARE }}</td>
+                        <td>{{ C.HARE_BOTH }}, {{ C.HARE_BOTH }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{ next_button }}
+{{ endblock }}

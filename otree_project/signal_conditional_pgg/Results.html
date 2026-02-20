@@ -1,0 +1,80 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Results
+{{ endblock }}
+
+{{ block content }}
+    <table class="table table-bordered">
+        <tr>
+            <th>Your signal</th>
+            <td>{{ player.sent_signal }}</td>
+        </tr>
+        <tr>
+            <th>Average signal of others (for your rule)</th>
+            <td>{{ player.avg_signal_others }}</td>
+        </tr>
+        <tr>
+            <th>Triggered conditional bin</th>
+            <td>{{ used_signal_bin_label }}</td>
+        </tr>
+        <tr>
+            <th>Your realized contribution</th>
+            <td>{{ player.realized_contribution }}</td>
+        </tr>
+        <tr>
+            <th>Group total contribution</th>
+            <td>{{ group.total_contribution }}</td>
+        </tr>
+        <tr>
+            <th>Group fund after multiplier</th>
+            <td>{{ group.multiplied_total }}</td>
+        </tr>
+        <tr>
+            <th>Your equal share</th>
+            <td>{{ group.individual_share }}</td>
+        </tr>
+        <tr>
+            <th>Belief bonus (contribution forecast)</th>
+            <td>{{ player.belief_bonus_contribution }}</td>
+        </tr>
+        <tr>
+            <th>Belief bonus (signal forecast)</th>
+            <td>{{ player.belief_bonus_signal }}</td>
+        </tr>
+        <tr class="table-success">
+            <th>Your payoff this round</th>
+            <td><strong>{{ player.payoff }}</strong></td>
+        </tr>
+    </table>
+
+    {{ if history_rows }}
+        <h5>Recent Round History</h5>
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Round</th>
+                    <th>Your signal</th>
+                    <th>Avg others' signal</th>
+                    <th>Used bin</th>
+                    <th>Contribution</th>
+                    <th>Belief bonus</th>
+                    <th>Payoff</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ for row in history_rows }}
+                    <tr>
+                        <td>{{ row.round_number }}</td>
+                        <td>{{ row.sent_signal }}</td>
+                        <td>{{ row.avg_signal_others }}</td>
+                        <td>{{ row.used_signal_bin }}</td>
+                        <td>{{ row.contribution }}</td>
+                        <td>{{ row.belief_bonus }}</td>
+                        <td>{{ row.payoff }}</td>
+                    </tr>
+                {{ endfor }}
+            </tbody>
+        </table>
+    {{ endif }}
+
+    {{ next_button }}
+{{ endblock }}

@@ -1,0 +1,34 @@
+{{ block title }}
+    Signal + Beliefs + Conditional Cooperation — Introduction
+{{ endblock }}
+
+{{ block content }}
+    <div class="card bg-light mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Stress-Test Game Overview</h5>
+            <p>
+                You are in a group of <strong>{{ C.PLAYERS_PER_GROUP }} players</strong> for
+                <strong>{{ C.NUM_ROUNDS }} rounds</strong> with random rematching each round.
+            </p>
+            <p>
+                Every round has three decisions:
+            </p>
+            <ol>
+                <li>Send a signal (0-100).</li>
+                <li>State beliefs about others.</li>
+                <li>Submit a full conditional contribution schedule (strategy method).</li>
+            </ol>
+            <p>
+                You receive <strong>{{ C.ENDOWMENT }}</strong> each round. The total contribution is
+                multiplied by <strong>{{ C.MULTIPLIER }}</strong> and shared equally.
+            </p>
+            <p>
+                Extra points come from belief accuracy:
+                contribution belief bonus up to <strong>{{ C.BELIEF_BONUS_CONTRIB_MAX }}</strong>,
+                signal belief bonus up to <strong>{{ C.BELIEF_BONUS_SIGNAL_MAX }}</strong>.
+            </p>
+        </div>
+    </div>
+
+    {{ next_button }}
+{{ endblock }}

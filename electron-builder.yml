@@ -1,0 +1,20 @@
+appId: com.otree-bots.app
+productName: oTree Bots
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - src/renderer/**/*.html
+  - src/renderer/**/*.css
+  - node_modules/**/*
+mac:
+  category: public.app-category.developer-tools
+  target: dmg
+linux:
+  category: Development
+  target:
+    - AppImage
+    - deb
+win:
+  target: nsis

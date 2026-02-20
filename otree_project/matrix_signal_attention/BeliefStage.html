@@ -1,0 +1,13 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Belief
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Report your belief about your partner's probability of choosing <strong>Stag</strong>.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

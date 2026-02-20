@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';" />
+  <title>oTree Bots</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Welcome / setup overlay -->
+  <div id="setup-screen">
+    <form id="setup-form" class="setup-card">
+      <h1 class="setup-card__title">Welcome to oTree Bots</h1>
+      <p class="setup-card__subtitle">Review or override startup parameters, then launch the run.</p>
+
+      <label class="setup-card__label" for="setup-url">Game URL</label>
+      <input id="setup-url" class="setup-card__input" type="url" placeholder="http://localhost:8000/join/abc123" required />
+
+      <label class="setup-card__label" for="setup-players">Number of bots</label>
+      <input id="setup-players" class="setup-card__input" type="number" min="1" step="1" required />
+
+      <label class="setup-card__label" for="setup-strategy">Strategy preset</label>
+      <select id="setup-strategy" class="setup-card__input">
+        <option value="random">Random</option>
+        <option value="minimum">Minimum</option>
+        <option value="maximum">Maximum</option>
+        <option value="midpoint">Midpoint</option>
+        <option value="fixed">Fixed (5)</option>
+        <option value="custom">Custom…</option>
+      </select>
+
+      <div id="strategy-details" class="strategy-grid">
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-number">Number inputs</label>
+          <select id="strat-number" class="setup-card__input setup-card__input--sm">
+            <option value="random">Random (within min–max)</option>
+            <option value="min">Minimum allowed</option>
+            <option value="max">Maximum allowed</option>
+            <option value="midpoint">Midpoint of range</option>
+            <option value="fixed">Fixed value →</option>
+          </select>
+        </div>
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-number-fixed">Fixed #</label>
+          <input id="strat-number-fixed" class="setup-card__input setup-card__input--sm" type="number" value="5" min="0" />
+        </div>
+
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-radio">Radio buttons</label>
+          <select id="strat-radio" class="setup-card__input setup-card__input--sm">
+            <option value="random">Random choice</option>
+            <option value="first">First option</option>
+            <option value="last">Last option</option>
+          </select>
+        </div>
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-select">Dropdowns</label>
+          <select id="strat-select" class="setup-card__input setup-card__input--sm">
+            <option value="random">Random choice</option>
+            <option value="first">First option</option>
+            <option value="last">Last option</option>
+          </select>
+        </div>
+
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-checkbox">Checkboxes</label>
+          <select id="strat-checkbox" class="setup-card__input setup-card__input--sm">
+            <option value="random">Random (coin flip each)</option>
+            <option value="all">Check all</option>
+            <option value="none">Leave unchecked</option>
+          </select>
+        </div>
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="strat-text">Text inputs</label>
+          <input id="strat-text" class="setup-card__input setup-card__input--sm" type="text" value="test" />
+        </div>
+
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="strategy-grid__label" for="strat-speed">Bot speed</label>
+          <div class="speed-control">
+            <input id="strat-speed" type="range" class="speed-control__slider" min="0" max="1000" step="50" value="300" />
+            <span id="strat-speed-label" class="speed-control__label">300 ms</span>
+          </div>
+          <span class="strategy-grid__hint">Delay between each field interaction (0 = instant, 500+ = demo mode)</span>
+        </div>
+      </div>
+
+      <p id="setup-error" class="setup-card__error" aria-live="polite"></p>
+
+      <div class="setup-card__actions">
+        <button id="setup-start" type="submit" class="setup-card__btn">Launch Run</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading" class="hidden">
+    <div class="loading__spinner"></div>
+    <div class="loading__text">Launching bots…</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <span class="toolbar__title">oTree Bots</span>
+    <button id="btn-logs" class="toolbar__btn toolbar__btn--logs" title="Toggle decision log">&#9776; Logs</button>
+    <span id="toolbar-status" class="toolbar__status">Waiting…</span>
+    <button id="btn-restart" class="toolbar__btn toolbar__btn--restart">Restart to Settings</button>
+    <button id="btn-stop" class="toolbar__btn toolbar__btn--danger">Stop All</button>
+  </div>
+
+  <!-- Bot Grid -->
+  <div id="grid-container">
+    <!-- Bot cards are injected dynamically by renderer.ts -->
+  </div>
+
+  <!-- Decision Log Drawer -->
+  <div id="log-drawer" class="log-drawer">
+    <div class="log-drawer__header">
+      <span class="log-drawer__title">Decision Log</span>
+      <button id="log-drawer-close" class="log-drawer__close" title="Close">&times;</button>
+    </div>
+    <div class="log-drawer__nav">
+      <button id="log-bot-prev" class="log-drawer__nav-btn" title="Previous bot">&larr;</button>
+      <select id="log-bot-select" class="log-drawer__nav-select" title="Jump to bot">
+        <option value="all">All Bots</option>
+      </select>
+      <button id="log-bot-next" class="log-drawer__nav-btn" title="Next bot">&rarr;</button>
+    </div>
+    <div id="log-drawer-tabs" class="log-drawer__tabs">
+      <!-- Bot tabs injected dynamically by renderer.ts -->
+    </div>
+    <div id="log-drawer-body" class="log-drawer__body">
+      <div class="log-drawer__empty">No log entries yet.</div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

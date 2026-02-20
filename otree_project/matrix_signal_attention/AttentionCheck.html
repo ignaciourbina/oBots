@@ -1,0 +1,14 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Attention Check
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Answer both questions. Incorrect answers do not block progress, but incur a penalty of
+        <strong>{{ C.ATTENTION_PENALTY }}</strong> this round.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

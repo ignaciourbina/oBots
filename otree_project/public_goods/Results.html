@@ -1,0 +1,34 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Results
+{{ endblock }}
+
+{{ block content }}
+    <table class="table table-bordered">
+        <tr>
+            <th>Your endowment</th>
+            <td>{{ C.ENDOWMENT }}</td>
+        </tr>
+        <tr>
+            <th>Your contribution</th>
+            <td>{{ player.contribution }}</td>
+        </tr>
+        <tr>
+            <th>Total group contribution</th>
+            <td>{{ group.total_contribution }}</td>
+        </tr>
+        <tr>
+            <th>Group fund (after multiplier)</th>
+            <td>{{ group.total_contribution }} × {{ C.MULTIPLIER }} = {{ multiplied_total }}</td>
+        </tr>
+        <tr>
+            <th>Your share from the fund</th>
+            <td>{{ group.individual_share }}</td>
+        </tr>
+        <tr class="table-success">
+            <th>Your payoff this round</th>
+            <td><strong>{{ player.payoff }}</strong></td>
+        </tr>
+    </table>
+
+    {{ next_button }}
+{{ endblock }}

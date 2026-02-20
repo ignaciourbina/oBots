@@ -1,0 +1,19 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Stage 2 Revision
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Stage-1 group total: <strong>{{ stage1_total }}</strong><br />
+        Stage-1 group average: <strong>{{ stage1_average }}</strong><br />
+        Threshold to unlock coordination bonus: <strong>{{ threshold }}</strong>
+    </p>
+
+    <p>
+        You may revise your contribution for the final round outcome.
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}

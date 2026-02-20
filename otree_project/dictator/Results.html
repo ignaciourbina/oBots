@@ -1,0 +1,41 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Results
+{{ endblock }}
+
+{{ block content }}
+    {{ if player.id_in_group == 1 }}
+        <p>You are the <strong>Dictator</strong>.</p>
+        <table class="table table-bordered">
+            <tr>
+                <th>You kept</th>
+                <td>{{ group.kept }}</td>
+            </tr>
+            <tr>
+                <th>You gave to the Receiver</th>
+                <td>{{ offer }}</td>
+            </tr>
+            <tr class="table-success">
+                <th>Your payoff</th>
+                <td><strong>{{ player.payoff }}</strong></td>
+            </tr>
+        </table>
+    {{ else }}
+        <p>You are the <strong>Receiver</strong>.</p>
+        <table class="table table-bordered">
+            <tr>
+                <th>The Dictator kept</th>
+                <td>{{ group.kept }}</td>
+            </tr>
+            <tr>
+                <th>You received</th>
+                <td>{{ offer }}</td>
+            </tr>
+            <tr class="table-success">
+                <th>Your payoff</th>
+                <td><strong>{{ player.payoff }}</strong></td>
+            </tr>
+        </table>
+    {{ endif }}
+
+    {{ next_button }}
+{{ endblock }}

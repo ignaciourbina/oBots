@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bot View</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #e0e0e0;
+    }
+
+    .bot-view {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── Status header bar ───────────────────────────── */
+    .bot-header {
+      height: 24px;
+      min-height: 24px;
+      background: #16213e;
+      color: #e2e2e2;
+      font-size: 11px;
+      padding: 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+    }
+
+    .bot-header__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #555;
+    }
+    .bot-header__dot--idle    { background: #555; }
+    .bot-header__dot--running { background: #00d4aa; animation: pulse 1.5s infinite; }
+    .bot-header__dot--paused  { background: #ffc107; }
+    .bot-header__dot--done    { background: #4caf50; }
+    .bot-header__dot--error   { background: #e94560; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .bot-header__label {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bot-header__state {
+      color: #888;
+      font-size: 10px;
+      white-space: nowrap;
+      margin-left: auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50%;
+    }
+
+    /* ── Screenshot area ─────────────────────────────── */
+    .bot-body {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: context-menu;
+    }
+
+    #screenshot {
+      max-width: 100%;
+      max-height: 100%;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 13px;
+    }
+
+    /* ── Error / done overlays ───────────────────────── */
+    .bot-body--done {
+      border: 2px solid #4caf50;
+    }
+    .bot-body--error {
+      border: 2px solid #e94560;
+    }
+  </style>
+</head>
+<body>
+  <div class="bot-view">
+    <div class="bot-header">
+      <span class="bot-header__dot" id="status-dot"></span>
+      <span class="bot-header__label" id="bot-label">Bot #?</span>
+      <span class="bot-header__state" id="bot-state">idle</span>
+    </div>
+
+    <div class="bot-body" id="bot-body">
+      <img id="screenshot" decoding="async" alt="Bot screenshot" />
+      <div id="placeholder">Waiting…</div>
+    </div>
+  </div>
+
+  <script>
+    const img = document.getElementById('screenshot');
+    const placeholder = document.getElementById('placeholder');
+    const botLabel = document.getElementById('bot-label');
+    const botState = document.getElementById('bot-state');
+    const statusDot = document.getElementById('status-dot');
+    const botBody = document.getElementById('bot-body');
+
+    let botId = null;
+    let botIndex = -1;
+
+    const api = window.botViewApi;
+
+    function setStatus(status) {
+      statusDot.className = 'bot-header__dot bot-header__dot--' + status;
+      botBody.classList.remove('bot-body--done', 'bot-body--error');
+      if (status === 'done') botBody.classList.add('bot-body--done');
+      if (status === 'error') botBody.classList.add('bot-body--error');
+    }
+
+    function setState(state) {
+      botState.textContent = state;
+    }
+
+    // Right-click → open focus window
+    botBody.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (botId && api) {
+        api.sendCommand('cmd:focus-bot', { id: botId });
+      }
+    });
+
+    // Left-click → open decision log drawer for this bot
+    botBody.addEventListener('click', function() {
+      if (botId && api) {
+        api.sendCommand('cmd:open-drawer', { id: botId, index: botIndex });
+      }
+    });
+
+    if (api) {
+      // Live screencast frame
+      api.onScreenshot(function(dataUrl) {
+        img.src = dataUrl;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+      });
+
+      // Initial bot info
+      api.onBotInfo(function(info) {
+        botId = info.id;
+        botIndex = info.index;
+        botLabel.textContent = 'Bot #' + info.index;
+        setStatus(info.status);
+        setState(info.currentState || 'idle');
+      });
+
+      // Status changes
+      api.onBotStatus(function(status) {
+        setStatus(status);
+      });
+
+      // FSM state changes
+      api.onBotState(function(state) {
+        setState(state);
+      });
+    }
+  </script>
+</body>
+</html>

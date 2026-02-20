@@ -1,0 +1,17 @@
+node_modules/
+dist/
+release/
+*.js.map
+*.d.ts
+.env
+.DS_Store
+Thumbs.db
+*.log
+logs/
+dev-screenshots/
+coverage/
+.vscode/
+__pycache__/
+*.pyc
+db.sqlite3
+.venv/

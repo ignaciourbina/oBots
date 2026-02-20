@@ -1,0 +1,13 @@
+{{ block title }}
+    Round {{ player.round_number }} of {{ C.NUM_ROUNDS }} — Action Choice
+{{ endblock }}
+
+{{ block content }}
+    <p>
+        Your private signal this round is: <strong>{{ private_signal_label }}</strong>
+    </p>
+
+    {{ formfields }}
+
+    {{ next_button }}
+{{ endblock }}
