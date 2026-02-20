@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEB="release/otree-bots_0.1.0_amd64.deb"
+DEB="release/otree-bots_0.2.0_amd64.deb"
 PKG="otree-bots"
 
 cd "$(dirname "$0")"

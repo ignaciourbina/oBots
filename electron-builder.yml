@@ -1,5 +1,5 @@
 appId: com.otree-bots.app
-productName: oTree Bots
+productName: otree-bots
 directories:
   output: release
   buildResources: build
@@ -13,6 +13,7 @@ mac:
   target: dmg
 linux:
   category: Development
+  icon: build/icons
   target:
     - AppImage
     - deb
