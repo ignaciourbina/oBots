@@ -27,6 +27,25 @@ let baseConfig: AppConfig;
 let currentPlayerCount = 0;
 let runStarted = false;
 let runStarting = false;
+let layoutRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let runStartedAt: number | null = null;
+let overviewWindow: BrowserWindow | null = null;
+let overviewTimer: ReturnType<typeof setInterval> | null = null;
+
+interface OverviewSnapshot {
+  timestamp: number;
+  expectedBots: number;
+  finishedBots: number;
+  runStartedAt: number | null;
+  bots: Array<{
+    id: string;
+    index: number;
+    status: string;
+    currentState: string;
+    logCount: number;
+    error?: string;
+  }>;
+}
 
 // ── Window Creation ─────────────────────────────────────────
 
@@ -159,7 +178,7 @@ async function launchBots(config: AppConfig): Promise<void> {
     try {
       await botRunner.launchBrowser(bot);
       await botRunner.navigate(bot, config.url);
-      await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0);
+      await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0);
     } catch (err) {
       log.error('Failed to start bot #%d: %s', bot.index, err instanceof Error ? err.message : String(err));
       registry.setError(bot.id, err instanceof Error ? err.message : String(err));
@@ -195,6 +214,7 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           checkboxStrategy: (start.strategy.checkboxStrategy as BotStrategy['checkboxStrategy']) ?? 'random',
           submitDelay: Number(start.strategy.submitDelay) || 0,
           actionDelayMs: Number(start.strategy.actionDelayMs) || 0,
+          actionJitterMs: Number(start.strategy.actionJitterMs) || 0,
         }
       : baseConfig.strategy;
     await launchBots({
@@ -204,6 +224,8 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
       strategy,
     });
     runStarted = true;
+    runStartedAt = Date.now();
+    sendOverviewSnapshot();
   } catch (err) {
     runStarted = false;
     throw err;
@@ -226,10 +248,105 @@ async function handleRestartRequest(): Promise<void> {
     await botRunner.stopAll();
     currentPlayerCount = 0;
     runStarted = false;
+    runStartedAt = null;
+    sendOverviewSnapshot();
     log.info('Run stopped and reset. Ready for new start request.');
   } finally {
     runStarting = false;
   }
+}
+
+function scheduleGridRefresh(reason: string): void {
+  if (layoutRefreshTimer) {
+    clearTimeout(layoutRefreshTimer);
+  }
+
+  layoutRefreshTimer = setTimeout(() => {
+    layoutRefreshTimer = null;
+    if (currentPlayerCount <= 0) return;
+    log.debug('Window geometry changed (%s) — refreshing grid layout', reason);
+    gridManager.refresh(currentPlayerCount, baseConfig.cols);
+  }, 80);
+}
+
+function buildOverviewSnapshot(): OverviewSnapshot {
+  const bots = registry
+    .getAllBots()
+    .slice()
+    .sort((a, b) => a.index - b.index)
+    .map((bot) => ({
+      id: bot.id,
+      index: bot.index,
+      status: bot.status,
+      currentState: bot.currentState,
+      logCount: bot.logs.length,
+      error: bot.error,
+    }));
+
+  const finishedBots = bots.filter((b) => b.status === 'done' || b.status === 'error').length;
+
+  return {
+    timestamp: Date.now(),
+    expectedBots: currentPlayerCount,
+    finishedBots,
+    runStartedAt,
+    bots,
+  };
+}
+
+function sendOverviewSnapshot(): void {
+  if (!overviewWindow || overviewWindow.isDestroyed()) return;
+  overviewWindow.webContents.send(IpcChannel.OVERVIEW_SNAPSHOT, buildOverviewSnapshot());
+}
+
+function startOverviewTicker(): void {
+  if (overviewTimer) return;
+  overviewTimer = setInterval(() => {
+    if (!overviewWindow || overviewWindow.isDestroyed()) return;
+    sendOverviewSnapshot();
+  }, 1000);
+}
+
+function stopOverviewTicker(): void {
+  if (overviewTimer) {
+    clearInterval(overviewTimer);
+    overviewTimer = null;
+  }
+}
+
+async function openOverviewWindow(): Promise<void> {
+  if (overviewWindow && !overviewWindow.isDestroyed()) {
+    overviewWindow.focus();
+    sendOverviewSnapshot();
+    return;
+  }
+
+  const overviewPreload = path.join(__dirname, 'overview-preload.js');
+  overviewWindow = new BrowserWindow({
+    width: 980,
+    height: 700,
+    minWidth: 680,
+    minHeight: 520,
+    title: 'Run Overview',
+    autoHideMenuBar: true,
+    webPreferences: {
+      sandbox: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: overviewPreload,
+    },
+  });
+  overviewWindow.setMenu(null);
+
+  const htmlPath = path.join(__dirname, '..', 'renderer', 'overview.html');
+  await overviewWindow.loadFile(htmlPath);
+  startOverviewTicker();
+  sendOverviewSnapshot();
+
+  overviewWindow.on('closed', () => {
+    overviewWindow = null;
+    stopOverviewTicker();
+  });
 }
 
 // ── App Lifecycle ───────────────────────────────────────────
@@ -268,14 +385,41 @@ app.whenReady().then(async () => {
       const DRAWER_WIDTH = 380;           // must match .log-drawer width in CSS
       gridManager.setDrawerOffset(payload.open ? DRAWER_WIDTH : 0);
       if (currentPlayerCount > 0) {
-        gridManager.refresh(currentPlayerCount, baseConfig.cols);
+        scheduleGridRefresh('drawer-toggle');
+      }
+    });
+
+    ipcMain.on(IpcChannel.CMD_OPEN_OVERVIEW, () => {
+      void openOverviewWindow().catch((err) => {
+        log.error('Failed to open overview window: %s', err instanceof Error ? err.message : String(err));
+      });
+    });
+
+    // ── Overview toggle — hide native BrowserViews so DOM modal stays on top ──
+    ipcMain.on(IpcChannel.CMD_OVERVIEW_TOGGLE, (_event, payload: { open: boolean }) => {
+      gridManager.setViewsVisible(!payload.open);
+      if (!payload.open && currentPlayerCount > 0) {
+        scheduleGridRefresh('overview-close');
       }
     });
 
     mainWindow.on('resize', () => {
-      if (currentPlayerCount > 0) {
-        gridManager.refresh(currentPlayerCount, baseConfig.cols);
-      }
+      scheduleGridRefresh('resize');
+    });
+    mainWindow.on('maximize', () => {
+      scheduleGridRefresh('maximize');
+    });
+    mainWindow.on('unmaximize', () => {
+      scheduleGridRefresh('unmaximize');
+    });
+    mainWindow.on('restore', () => {
+      scheduleGridRefresh('restore');
+    });
+    mainWindow.on('enter-full-screen', () => {
+      scheduleGridRefresh('enter-full-screen');
+    });
+    mainWindow.on('leave-full-screen', () => {
+      scheduleGridRefresh('leave-full-screen');
     });
 
     // Headless mode has no setup form, so start immediately using CLI values.
@@ -293,6 +437,10 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   removeIpcHandlers();
+  ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
+  ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
+  ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_DRAWER);
+  ipcMain.removeAllListeners(IpcChannel.CMD_DRAWER_TOGGLE);
   if (registry) {
     await registry.destroyAll();
   }
@@ -300,6 +448,10 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('before-quit', async () => {
+  stopOverviewTicker();
+  if (overviewWindow && !overviewWindow.isDestroyed()) {
+    overviewWindow.close();
+  }
   if (botRunner) {
     await botRunner.stopAll();
   }

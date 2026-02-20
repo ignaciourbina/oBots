@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Run Overview</title>
+  <style>
+    :root {
+      --bg-0: #0b1020;
+      --bg-1: #111a35;
+      --panel: #111a32cc;
+      --panel-border: #2a3760;
+      --text: #e7eeff;
+      --muted: #9aa8ce;
+      --accent: #69a2ff;
+      --ok: #48d18b;
+      --warn: #ffbe4d;
+      --err: #ff6776;
+      --idle: #9aa8ce;
+      --radius: 12px;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      color: var(--text);
+      font-family: 'Avenir Next', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+      overflow: hidden;
+      background:
+        radial-gradient(1200px 600px at -10% -10%, #1d2c57 0%, transparent 60%),
+        radial-gradient(900px 500px at 110% 10%, #12395c 0%, transparent 55%),
+        linear-gradient(160deg, var(--bg-0), var(--bg-1));
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 24px 24px;
+      mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+    }
+
+    .wrap {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 10px;
+      padding: 14px;
+      animation: fadeIn 220ms ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .title h1 {
+      font-size: 18px;
+      line-height: 1.15;
+      letter-spacing: 0.01em;
+      color: #d7e6ff;
+    }
+
+    .title p {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .run-health {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid #355084;
+      color: #9bc0ff;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(70, 113, 185, 0.18);
+      white-space: nowrap;
+    }
+
+    .run-health--ok {
+      border-color: rgba(72, 209, 139, 0.45);
+      color: #8de7b9;
+      background: rgba(72, 209, 139, 0.16);
+    }
+
+    .run-health--warn {
+      border-color: rgba(255, 190, 77, 0.45);
+      color: #ffd894;
+      background: rgba(255, 190, 77, 0.16);
+    }
+
+    .run-health--err {
+      border-color: rgba(255, 103, 118, 0.45);
+      color: #ffb0b8;
+      background: rgba(255, 103, 118, 0.18);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .kpi {
+      position: relative;
+      border: 1px solid var(--panel-border);
+      background: linear-gradient(180deg, rgba(40, 58, 102, 0.42), rgba(18, 27, 52, 0.72));
+      border-radius: 10px;
+      padding: 9px 10px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .kpi::after {
+      content: '';
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.75;
+    }
+
+    .kpi .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .kpi .value {
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 800;
+      margin-top: 3px;
+      color: #f2f6ff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .kpi .value.mono {
+      font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+      font-size: 17px;
+    }
+
+    .progress-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .progress-meta strong {
+      color: #d8e6ff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(159, 178, 220, 0.15);
+      border: 1px solid rgba(122, 143, 189, 0.35);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #4f88ff, #64d8b2);
+      box-shadow: 0 0 16px rgba(100, 216, 178, 0.4);
+      transition: width 220ms ease-out;
+    }
+
+    .panes {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 8px;
+    }
+
+    .panel {
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(6px);
+    }
+
+    .panel h2 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #c4d4ff;
+      padding: 9px 11px;
+      border-bottom: 1px solid rgba(89, 111, 162, 0.44);
+      background: linear-gradient(180deg, rgba(35, 52, 93, 0.55), rgba(17, 26, 50, 0.2));
+    }
+
+    .panel .body {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+
+    .rows {
+      display: grid;
+      gap: 6px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 8px;
+      border: 1px solid rgba(84, 105, 150, 0.36);
+      border-radius: 8px;
+      background: rgba(20, 31, 60, 0.45);
+      color: #c3d0f3;
+    }
+
+    .row strong {
+      color: #f4f7ff;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th,
+    td {
+      padding: 7px 8px;
+      border-bottom: 1px solid rgba(91, 112, 157, 0.33);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: #8fa4d7;
+      position: sticky;
+      top: 0;
+      background: #142042;
+      z-index: 2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 10px;
+    }
+
+    tbody tr:nth-child(even) {
+      background: rgba(28, 42, 77, 0.23);
+    }
+
+    td { color: #dde5fb; }
+
+    .state {
+      font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+      color: #c7d7ff;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 66px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .pill--running {
+      color: #9bc8ff;
+      background: rgba(96, 163, 255, 0.18);
+      border-color: rgba(96, 163, 255, 0.45);
+    }
+
+    .pill--done {
+      color: #90e5be;
+      background: rgba(72, 209, 139, 0.16);
+      border-color: rgba(72, 209, 139, 0.42);
+    }
+
+    .pill--paused {
+      color: #ffe4a5;
+      background: rgba(255, 190, 77, 0.16);
+      border-color: rgba(255, 190, 77, 0.45);
+    }
+
+    .pill--error {
+      color: #ffb5bf;
+      background: rgba(255, 103, 118, 0.2);
+      border-color: rgba(255, 103, 118, 0.46);
+    }
+
+    .pill--idle,
+    .pill--unknown {
+      color: #c7d3f8;
+      background: rgba(145, 159, 197, 0.16);
+      border-color: rgba(145, 159, 197, 0.4);
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+    }
+
+    @media (max-width: 1050px) {
+      .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 900px) {
+      .wrap {
+        grid-template-rows: auto auto auto 1fr;
+        gap: 8px;
+        padding: 10px;
+      }
+      .topbar {
+        padding: 8px 10px;
+      }
+      .title h1 {
+        font-size: 16px;
+      }
+      .kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .panes {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="title">
+        <h1>Run Overview</h1>
+        <p id="meta">Waiting for data...</p>
+      </div>
+      <div id="run-health" class="run-health">No Data</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Expected Bots</div><div class="value" id="kpi-expected">0</div></div>
+      <div class="kpi"><div class="label">Observed Bots</div><div class="value" id="kpi-observed">0</div></div>
+      <div class="kpi"><div class="label">Finished</div><div class="value" id="kpi-finished">0</div></div>
+      <div class="kpi"><div class="label">In Wait States</div><div class="value" id="kpi-waiting">0</div></div>
+      <div class="kpi"><div class="label">Elapsed</div><div class="value mono" id="kpi-elapsed">00:00:00</div></div>
+    </div>
+
+    <div class="progress-card">
+      <div class="progress-meta">
+        <span>Overall completion</span>
+        <strong id="progress-label">0 / 0</strong>
+      </div>
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="panes">
+      <div class="panel">
+        <h2>Bots</h2>
+        <div class="body">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Status</th>
+                <th>State</th>
+                <th>Logs</th>
+              </tr>
+            </thead>
+            <tbody id="bots-body">
+              <tr><td class="empty" colspan="4">No bots yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Breakdown</h2>
+        <div class="body">
+          <div class="rows" id="status-rows"></div>
+          <div style="height: 8px"></div>
+          <div class="rows" id="signal-rows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const meta = document.getElementById('meta');
+    const runHealth = document.getElementById('run-health');
+    const progressLabel = document.getElementById('progress-label');
+    const progressFill = document.getElementById('progress-fill');
+
+    const kpiExpected = document.getElementById('kpi-expected');
+    const kpiObserved = document.getElementById('kpi-observed');
+    const kpiFinished = document.getElementById('kpi-finished');
+    const kpiWaiting = document.getElementById('kpi-waiting');
+    const kpiElapsed = document.getElementById('kpi-elapsed');
+
+    const botsBody = document.getElementById('bots-body');
+    const statusRows = document.getElementById('status-rows');
+    const signalRows = document.getElementById('signal-rows');
+
+    const fmtDuration = (ms) => {
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+      const ss = String(totalSec % 60).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    };
+
+    const escapeHtml = (v) => String(v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const statusClass = (value) => {
+      const key = String(value || 'unknown').toLowerCase();
+      if (['running', 'done', 'paused', 'error', 'idle'].includes(key)) return key;
+      return 'unknown';
+    };
+
+    const asList = (mapObj) => Object.entries(mapObj).map(([k, v]) =>
+      `<div class="row"><span>${escapeHtml(k)}</span><strong>${Number(v) || 0}</strong></div>`
+    ).join('');
+
+    const setHealth = ({ expected, finished, errors, waiting }) => {
+      runHealth.classList.remove('run-health--ok', 'run-health--warn', 'run-health--err');
+
+      if (errors > 0) {
+        runHealth.textContent = 'Issues Detected';
+        runHealth.classList.add('run-health--err');
+        return;
+      }
+
+      if (expected > 0 && finished >= expected) {
+        runHealth.textContent = 'Completed';
+        runHealth.classList.add('run-health--ok');
+        return;
+      }
+
+      if (waiting > 0) {
+        runHealth.textContent = 'Waiting';
+        runHealth.classList.add('run-health--warn');
+        return;
+      }
+
+      runHealth.textContent = expected > 0 ? 'Running' : 'No Data';
+    };
+
+    const render = (snapshot) => {
+      const bots = Array.isArray(snapshot?.bots) ? snapshot.bots.slice() : [];
+      bots.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+      const expected = Number(snapshot?.expectedBots || 0);
+      const observed = bots.length;
+      const finished = Number(snapshot?.finishedBots || 0);
+      const runStartedAt = snapshot?.runStartedAt || null;
+      const elapsed = runStartedAt ? fmtDuration(Date.now() - Number(runStartedAt)) : '00:00:00';
+
+      const status = { running: 0, done: 0, paused: 0, error: 0, idle: 0 };
+      const states = {};
+      let waiting = 0;
+      let logsTotal = 0;
+
+      for (const b of bots) {
+        const s = String(b.status || 'idle').toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(status, s)) status[s] += 1;
+        const st = String(b.currentState || '(unknown)');
+        states[st] = (states[st] || 0) + 1;
+        if (st.toLowerCase().includes('wait')) waiting += 1;
+        logsTotal += Number(b.logCount || 0);
+      }
+
+      const completionBase = expected > 0 ? expected : Math.max(1, observed);
+      const completion = Math.min(100, Math.round((finished / completionBase) * 100));
+
+      kpiExpected.textContent = String(expected);
+      kpiObserved.textContent = String(observed);
+      kpiFinished.textContent = String(finished);
+      kpiWaiting.textContent = String(waiting);
+      kpiElapsed.textContent = elapsed;
+      progressLabel.textContent = `${finished} / ${completionBase} (${completion}%)`;
+      progressFill.style.width = `${completion}%`;
+
+      const ts = new Date(snapshot?.timestamp || Date.now());
+      meta.textContent = `Updated ${ts.toLocaleTimeString()}`;
+      setHealth({ expected: completionBase, finished, errors: status.error, waiting });
+
+      statusRows.innerHTML = asList({
+        Running: status.running,
+        Done: status.done,
+        Paused: status.paused,
+        Error: status.error,
+        Idle: Math.max(0, expected - observed) + status.idle,
+      });
+
+      const uniqueStates = Object.keys(states).length;
+      const avgLogs = observed > 0 ? (logsTotal / observed).toFixed(1) : '0.0';
+
+      signalRows.innerHTML = asList({
+        'Wait States': waiting,
+        'Unique States': uniqueStates,
+        'Avg Logs / Bot': avgLogs,
+      });
+
+      if (!bots.length) {
+        botsBody.innerHTML = '<tr><td class="empty" colspan="4">No bots yet.</td></tr>';
+      } else {
+        botsBody.innerHTML = bots.map((b) => {
+          const cls = statusClass(b.status);
+          return `
+            <tr>
+              <td>${Number(b.index ?? 0)}</td>
+              <td><span class="pill pill--${cls}">${escapeHtml(b.status || 'unknown')}</span></td>
+              <td class="state">${escapeHtml(b.currentState || '(unknown)')}</td>
+              <td>${Number(b.logCount ?? 0)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    };
+
+    const api = window.overviewApi;
+    if (api && typeof api.onSnapshot === 'function') {
+      api.onSnapshot((snapshot) => render(snapshot));
+    }
+  </script>
+</body>
+</html>

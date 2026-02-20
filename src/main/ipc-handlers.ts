@@ -22,6 +22,7 @@ export interface StrategyPayload {
   checkboxStrategy: string;
   submitDelay: number;
   actionDelayMs: number;
+  actionJitterMs: number;
 }
 
 export interface StartPayload {
@@ -99,4 +100,5 @@ export function removeIpcHandlers(): void {
   ipcMain.removeAllListeners(IpcChannel.CMD_FOCUS);
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_DRAWER);
   ipcMain.removeAllListeners(IpcChannel.CMD_DRAWER_TOGGLE);
+  ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
 }

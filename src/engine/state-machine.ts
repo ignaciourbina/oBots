@@ -31,6 +31,7 @@ export class StateMachineRunner {
   private _status: BotStatus = 'idle';
   private _currentState: string;
   private readonly actionDelayMs: number;
+  private readonly actionJitterMs: number;
 
   constructor(
     private readonly botId: string,
@@ -39,9 +40,11 @@ export class StateMachineRunner {
     private readonly callbacks: FSMCallbacks,
     private readonly delayMultiplier: number = 1.0,
     actionDelayMs: number = 0,
+    actionJitterMs: number = 0,
   ) {
     this._currentState = script.initialState;
     this.actionDelayMs = actionDelayMs;
+    this.actionJitterMs = actionJitterMs;
   }
 
   get status(): BotStatus {
@@ -138,8 +141,9 @@ export class StateMachineRunner {
         }
 
         // Inter-action delay so interactions are visible in screencast
-        if (this.actionDelayMs > 0 && action.type !== 'wait' && action.type !== 'log') {
-          await sleep(this.actionDelayMs);
+        if ((this.actionDelayMs > 0 || this.actionJitterMs > 0) && action.type !== 'wait' && action.type !== 'log') {
+          const jitter = this.actionJitterMs > 0 ? Math.round(Math.random() * this.actionJitterMs) : 0;
+          await sleep(this.actionDelayMs + jitter);
         }
       }
 
@@ -177,12 +181,18 @@ export class StateMachineRunner {
       for (const t of transitions) {
         // If no guard, the transition fires immediately
         if (!t.guard) {
+          if (t.delay && t.delay > 0) {
+            await sleep(t.delay);
+          }
           return t.target;
         }
 
         try {
           const passes = await evaluateGuard(this.page, t.guard);
           if (passes) {
+            if (t.delay && t.delay > 0) {
+              await sleep(t.delay);
+            }
             return t.target;
           }
         } catch {
@@ -200,8 +210,7 @@ export class StateMachineRunner {
       }
 
       // Wait before next poll cycle
-      const pollDelay = transitions[0]?.delay ?? DEFAULTS.pollIntervalMs;
-      await sleep(pollDelay);
+      await sleep(DEFAULTS.pollIntervalMs);
     }
 
     // Unreachable unless paused/stopped, but TypeScript needs a return

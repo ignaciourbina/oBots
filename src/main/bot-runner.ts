@@ -110,7 +110,7 @@ export class BotRunner {
   /**
    * Start the FSM for the given bot.
    */
-  async startFSM(bot: BotInstance, actionDelayMs: number = 0): Promise<void> {
+  async startFSM(bot: BotInstance, actionDelayMs: number = 0, actionJitterMs: number = 0): Promise<void> {
     if (!bot.page) throw new Error(`Bot ${bot.id} has no page — launch browser first`);
 
     const callbacks: FSMCallbacks = {
@@ -174,6 +174,7 @@ export class BotRunner {
       callbacks,
       this.delayMultiplier,
       actionDelayMs,
+      actionJitterMs,
     );
 
     this.runners.set(bot.id, runner);

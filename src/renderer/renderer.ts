@@ -26,6 +26,7 @@ interface StrategyPayload {
   checkboxStrategy: string;
   submitDelay: number;
   actionDelayMs: number;
+  actionJitterMs: number;
 }
 
 interface StartCommandPayload {
@@ -104,6 +105,8 @@ const stratCheckboxSelect = document.getElementById('strat-checkbox') as HTMLSel
 const stratTextInput = document.getElementById('strat-text') as HTMLInputElement;
 const stratSpeedSlider = document.getElementById('strat-speed') as HTMLInputElement;
 const stratSpeedLabel = document.getElementById('strat-speed-label') as HTMLSpanElement;
+const stratJitterSlider = document.getElementById('strat-jitter') as HTMLInputElement;
+const stratJitterLabel = document.getElementById('strat-jitter-label') as HTMLSpanElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
 
 // ── Log Drawer DOM References ───────────────────────────────
@@ -115,6 +118,7 @@ const btnLogBotPrev = document.getElementById('log-bot-prev') as HTMLButtonEleme
 const btnLogBotNext = document.getElementById('log-bot-next') as HTMLButtonElement;
 const btnLogs = document.getElementById('btn-logs') as HTMLButtonElement;
 const btnDrawerClose = document.getElementById('log-drawer-close') as HTMLButtonElement;
+const btnOverview = document.getElementById('btn-overview') as HTMLButtonElement;
 
 let runRequested = false;
 
@@ -123,11 +127,11 @@ let runRequested = false;
  */
 /** Strategy presets — mirrors STRATEGY_PRESETS from types.ts */
 const PRESETS: Record<string, Omit<StrategyPayload, 'name'>> = {
-  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', submitDelay: 0, actionDelayMs: 300 },
-  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   submitDelay: 0, actionDelayMs: 300 },
-  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300 },
-  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300 },
-  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300 },
+  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
+  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
+  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
+  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
+  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
 };
 
 /** Apply a preset's values to the strategy detail controls */
@@ -142,6 +146,8 @@ function applyPreset(key: string): void {
   stratTextInput.value = preset.textValue;
   stratSpeedSlider.value = String(preset.actionDelayMs);
   stratSpeedLabel.textContent = `${preset.actionDelayMs} ms`;
+  stratJitterSlider.value = String(preset.actionJitterMs);
+  stratJitterLabel.textContent = `${preset.actionJitterMs} ms`;
 }
 
 /** Read the full strategy object from the detail controls */
@@ -158,6 +164,7 @@ function readStrategy(): StrategyPayload {
     checkboxStrategy: stratCheckboxSelect.value,
     submitDelay: 0,
     actionDelayMs: Number(stratSpeedSlider.value) || 0,
+    actionJitterMs: Number(stratJitterSlider.value) || 0,
   };
 }
 
@@ -186,6 +193,7 @@ function showLaunchingState(): void {
   toolbarStatus.textContent = 'Starting run…';
   btnRestart.disabled = false;
   btnStop.disabled = false;
+  updateOverviewButton();
 }
 
 /**
@@ -214,6 +222,7 @@ function resetToSetupScreen(): void {
   toolbarStatus.textContent = 'Configure run and click Launch Run';
   btnRestart.disabled = true;
   btnStop.disabled = true;
+  updateOverviewButton();
 }
 
 /**
@@ -269,6 +278,11 @@ function initializeSetupForm(): void {
   stratSpeedSlider.addEventListener('input', () => {
     stratSpeedLabel.textContent = `${stratSpeedSlider.value} ms`;
   });
+
+  // Jitter slider label sync
+  stratJitterSlider.addEventListener('input', () => {
+    stratJitterLabel.textContent = `${stratJitterSlider.value} ms`;
+  });
 }
 
 // ── Grid Layout ─────────────────────────────────────────────
@@ -311,11 +325,13 @@ function updateToolbarStatus(): void {
   } else {
     toolbarStatus.textContent = `${finishedCount}/${totalCount} finished`;
   }
+  updateOverviewButton();
 }
 
 function handleAllDone(): void {
   toolbarStatus.textContent = `✓ All ${totalCount} bots finished`;
   toolbarStatus.style.color = '#4caf50';
+  updateOverviewButton();
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -547,6 +563,14 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => map[c] || c);
 }
 
+function updateOverviewButton(): void {
+  if (totalCount > 0) {
+    btnOverview.textContent = `Overview ${finishedCount}/${totalCount}`;
+  } else {
+    btnOverview.textContent = 'Overview';
+  }
+}
+
 /** Open the drawer with a specific bot's tab selected */
 function openDrawerForBot(botId: string): void {
   if (!botLogs.has(botId)) {
@@ -579,6 +603,7 @@ if (!api) {
     toggleDrawer();
     if (drawerOpen) renderDrawerBody();
   });
+  btnOverview.addEventListener('click', () => api.sendCommand('cmd:open-overview'));
   btnDrawerClose.addEventListener('click', () => toggleDrawer(false));
   logBotSelect.addEventListener('change', () => switchDrawerTab(logBotSelect.value));
   btnLogBotPrev.addEventListener('click', () => moveDrawerBotSelection(-1));
@@ -594,6 +619,7 @@ if (!api) {
     }
   });
   refreshDrawerTabs();
+  updateOverviewButton();
 
   api.onGridLayout((layout: GridLayout) => {
     console.log('[renderer] grid:layout received', JSON.stringify(layout));

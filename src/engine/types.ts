@@ -180,6 +180,7 @@ export enum IpcChannel {
   CMD_PAUSE        = 'cmd:pause-bot',
   CMD_RESUME       = 'cmd:resume-bot',
   CMD_FOCUS        = 'cmd:focus-bot',
+  CMD_OPEN_OVERVIEW = 'cmd:open-overview',
   SCREENSHOT_DIAG  = 'diag:screenshot',
 
   // Main → Grid BrowserViews (per-bot processes)
@@ -193,6 +194,10 @@ export enum IpcChannel {
 
   // Renderer → Main (drawer state)
   CMD_DRAWER_TOGGLE  = 'cmd:drawer-toggle',
+  CMD_OVERVIEW_TOGGLE = 'cmd:overview-toggle',
+
+  // Main → Overview window
+  OVERVIEW_SNAPSHOT = 'overview:snapshot',
 
   // Main → Focus window
   FOCUS_SCREENSHOT = 'focus:screenshot',
@@ -236,6 +241,8 @@ export interface BotStrategy {
   submitDelay: number;
   /** Milliseconds to wait between each action / field interaction (0 = fast) */
   actionDelayMs: number;
+  /** Maximum random jitter (ms) added to each action delay (0 = deterministic) */
+  actionJitterMs: number;
 }
 
 /** Built-in strategy presets */
@@ -250,6 +257,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     checkboxStrategy: 'random',
     submitDelay: 0,
     actionDelayMs: 300,
+    actionJitterMs: 0,
   },
   minimum: {
     name: 'Minimum',
@@ -261,6 +269,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     checkboxStrategy: 'none',
     submitDelay: 0,
     actionDelayMs: 300,
+    actionJitterMs: 0,
   },
   maximum: {
     name: 'Maximum',
@@ -272,6 +281,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     checkboxStrategy: 'all',
     submitDelay: 0,
     actionDelayMs: 300,
+    actionJitterMs: 0,
   },
   midpoint: {
     name: 'Midpoint',
@@ -283,6 +293,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     checkboxStrategy: 'all',
     submitDelay: 0,
     actionDelayMs: 300,
+    actionJitterMs: 0,
   },
   fixed: {
     name: 'Fixed (5)',
@@ -294,6 +305,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     checkboxStrategy: 'all',
     submitDelay: 0,
     actionDelayMs: 300,
+    actionJitterMs: 0,
   },
 };
 
@@ -344,5 +356,9 @@ export const DEFAULTS = {
     '--disable-dev-shm-usage',
     '--disable-infobars',
     '--disable-extensions',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion',
   ] as readonly string[],
 } as const;

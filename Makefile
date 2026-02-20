@@ -10,7 +10,7 @@ OTREE_ISOLATE_DB ?= 1
 OTREE_CREATE_SESSION ?= 1
 OTREE_SESSION_CONFIG ?= stress_multi_app_suite
 
-.PHONY: run dev build clean test lint watch otree up
+.PHONY: run dev build clean test lint watch otree up package package-win package-linux
 
 # Run bots against the session URL from .env
 run: build
@@ -97,3 +97,15 @@ lint:
 # Remove build artifacts
 clean:
 	rm -rf dist
+
+# Package Electron app for the current platform
+package: build
+	npx electron-builder
+
+# Package Electron app for Linux (AppImage + deb)
+package-linux: build
+	npx electron-builder --linux
+
+# Package Electron app for Windows (.exe installer)
+package-win: build
+	npx electron-builder --win

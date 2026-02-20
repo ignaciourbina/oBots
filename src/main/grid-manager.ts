@@ -28,6 +28,7 @@ export class GridManager {
   private layout: GridLayout | null = null;
   private botViews: Map<string, BotView> = new Map();      // botId → BotView
   private slotViews: Map<number, BotView> = new Map();      // slotIndex → BotView
+  private viewsVisible = true;
 
   /** Pixels reserved on the right for the log drawer (0 when closed). */
   private drawerOffset = 0;
@@ -39,6 +40,13 @@ export class GridManager {
     this.drawerOffset = px;
   }
 
+  /** Show/hide all BrowserViews (used for DOM overlays that must be on top). */
+  setViewsVisible(visible: boolean): void {
+    if (this.viewsVisible === visible) return;
+    this.viewsVisible = visible;
+    this.repositionAllViews();
+  }
+
   // ── Layout computation ────────────────────────────────
 
   /**
@@ -46,18 +54,28 @@ export class GridManager {
    * accounting for the toolbar height.
    */
   computeLayout(botCount: number, forceCols?: number): GridLayout {
+    const safeBotCount = Math.max(0, botCount);
+    if (safeBotCount === 0) {
+      this.layout = { cols: 1, rows: 1, cells: [] };
+      return this.layout;
+    }
+
     const [rawW, containerH] = this.win.getContentSize();
-    const containerW = rawW - this.drawerOffset;
-    const gridH = containerH - TOOLBAR_HEIGHT;
+    const containerW = Math.max(1, rawW - this.drawerOffset);
+    const gridH = Math.max(1, containerH - TOOLBAR_HEIGHT);
 
-    const cols = forceCols ?? Math.ceil(Math.sqrt(botCount));
-    const rows = Math.ceil(botCount / cols);
+    const cols = Math.max(1, forceCols ?? Math.ceil(Math.sqrt(safeBotCount)));
+    const rows = Math.max(1, Math.ceil(safeBotCount / cols));
 
-    const cellWidth = Math.floor((containerW - CELL_GAP * (cols + 1)) / cols);
-    const cellHeight = Math.floor((gridH - CELL_GAP * (rows + 1)) / rows);
+    // Keep bounds valid even for tiny windows / large drawer offsets.
+    const availableW = Math.max(cols, containerW - CELL_GAP * (cols + 1));
+    const availableH = Math.max(rows, gridH - CELL_GAP * (rows + 1));
+
+    const cellWidth = Math.floor(availableW / cols);
+    const cellHeight = Math.floor(availableH / rows);
 
     const cells: GridCell[] = [];
-    for (let i = 0; i < botCount; i++) {
+    for (let i = 0; i < safeBotCount; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
       cells.push({
@@ -198,12 +216,18 @@ export class GridManager {
     for (const cell of this.layout.cells) {
       const bv = this.slotViews.get(cell.slotIndex);
       if (bv && !bv.view.webContents.isDestroyed()) {
-        bv.view.setBounds({
-          x: cell.x,
-          y: cell.y,
-          width: cell.width,
-          height: cell.height,
-        });
+        if (!this.viewsVisible) {
+          // BrowserViews are native layers above renderer DOM.
+          // Collapse them while overlays are open so DOM panels stay visible/clickable.
+          bv.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+        } else {
+          bv.view.setBounds({
+            x: cell.x,
+            y: cell.y,
+            width: cell.width,
+            height: cell.height,
+          });
+        }
       }
     }
   }

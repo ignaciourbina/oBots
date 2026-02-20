@@ -26,4 +26,36 @@ describe('createAutoPlayer terminal detection', () => {
       expect(terminalTransition, `missing terminal guard in ${stateId}`).toBeDefined();
     }
   });
+
+  it('adds wait-page nudge and stuck-ready recovery', () => {
+    const script = createAutoPlayer();
+    const waitEntry = script.states.handleWaitPage.onEntry;
+    const hasNudgeEval = waitEntry.some((a) =>
+      a.type === 'evaluate' && typeof a.value === 'string' && a.value.includes('waitForRedirect'),
+    );
+    expect(hasNudgeEval).toBe(true);
+
+    const transitions = script.states.handleWaitPage.transitions;
+    const recoveryTransition = transitions.find((t) => t.target === 'recoverWaitPage');
+    expect(recoveryTransition?.guard?.type).toBe('custom');
+    expect(recoveryTransition?.guard?.fn).toContain('participants ready');
+    expect(recoveryTransition?.guard?.fn).toContain('__otb_wait_recovered_urls');
+    const staleRecoveryTransition = transitions.find((t) => t.target === 'recoverWaitPageStale');
+    expect(staleRecoveryTransition?.guard?.type).toBe('custom');
+    expect(staleRecoveryTransition?.guard?.fn).toContain('__otb_wait_progress_state');
+
+    expect(script.states.recoverWaitPage).toBeDefined();
+    const recoverEntry = script.states.recoverWaitPage.onEntry;
+    const hasRecoveryMarker = recoverEntry.some((a) =>
+      a.type === 'evaluate' && typeof a.value === 'string' && a.value.includes('__otb_wait_recovered_urls'),
+    );
+    expect(hasRecoveryMarker).toBe(true);
+
+    expect(script.states.recoverWaitPageStale).toBeDefined();
+    const staleRecoverEntry = script.states.recoverWaitPageStale.onEntry;
+    const hasStaleRecoveryMarker = staleRecoverEntry.some((a) =>
+      a.type === 'evaluate' && typeof a.value === 'string' && a.value.includes('__otb_wait_progress_state'),
+    );
+    expect(hasStaleRecoveryMarker).toBe(true);
+  });
 });

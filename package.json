@@ -29,7 +29,7 @@
     "puppeteer",
     "electron"
   ],
-  "author": "",
+  "author": "Ignacio Urbina <ignacio.urbina@stonybrook.edu>",
   "license": "MIT",
   "dependencies": {
     "puppeteer": "^22.0.0",

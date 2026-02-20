@@ -95,4 +95,46 @@ describe('GridManager', () => {
     expect(payload.rows).toBe(3);
     expect(payload.cells).toHaveLength(9);
   });
+
+  it('keeps cell sizes positive on very narrow windows with drawer offset', () => {
+    const win = makeWindow(240, 140);
+    const manager = new GridManager(win);
+    manager.setDrawerOffset(500);
+
+    const layout = manager.computeLayout(4, 2);
+    expect(layout.cells).toHaveLength(4);
+    for (const cell of layout.cells) {
+      expect(cell.width).toBeGreaterThan(0);
+      expect(cell.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('can hide and restore BrowserViews for overlay mode', () => {
+    const win = makeWindow(1200, 800);
+    const manager = new GridManager(win);
+    const boundsSpy = vi.fn();
+
+    // Inject one mocked slot view + layout (private members in TS, accessible in tests via any).
+    (manager as any).layout = {
+      cols: 1,
+      rows: 1,
+      cells: [{ slotIndex: 0, x: 12, y: 40, width: 640, height: 360 }],
+    };
+    (manager as any).slotViews = new Map([
+      [0, {
+        slotIndex: 0,
+        botId: 'bot-1',
+        view: {
+          setBounds: boundsSpy,
+          webContents: { isDestroyed: () => false },
+        },
+      }],
+    ]);
+
+    manager.setViewsVisible(false);
+    expect(boundsSpy).toHaveBeenCalledWith({ x: 0, y: 0, width: 0, height: 0 });
+
+    manager.setViewsVisible(true);
+    expect(boundsSpy).toHaveBeenCalledWith({ x: 12, y: 40, width: 640, height: 360 });
+  });
 });

@@ -19,12 +19,201 @@ import { BotScript, BotStrategy, DEFAULT_STRATEGY } from '../engine/types';
 // ── WaitPage detection guard (shared) ───────────────────────
 
 const WAIT_PAGE_GUARD = `(() => {
+  const text = (document.body?.innerText || '').toLowerCase();
+  const hasWaitText = text.includes('please wait') && text.includes('participants ready');
+  const hasWaitScript = Array.from(document.scripts || []).some((s) =>
+    /waitforredirect|is_wait_page/i.test(s.textContent || '')
+  );
+
   return !!(
     document.querySelector('.otree-wait-page') ||
     document.querySelector('[data-wait-page]') ||
-    (document.querySelector('script') &&
-      document.documentElement.innerHTML.includes('waitForRedirect'))
+    hasWaitScript ||
+    hasWaitText
   );
+})()`;
+
+const EXIT_WAIT_PAGE_GUARD = `(() => {
+  const text = (document.body?.innerText || '').toLowerCase();
+  const hasWaitText = text.includes('please wait') && text.includes('participants ready');
+  const hasWaitScript = Array.from(document.scripts || []).some((s) =>
+    /waitforredirect|is_wait_page/i.test(s.textContent || '')
+  );
+  const isWaitPage = !!(
+    document.querySelector('.otree-wait-page') ||
+    document.querySelector('[data-wait-page]') ||
+    hasWaitScript ||
+    hasWaitText
+  );
+  return !isWaitPage;
+})()`;
+
+const WAIT_PAGE_STUCK_READY_GUARD = `(() => {
+  const urlKey = window.location.pathname + window.location.search;
+  const recoveredKey = '__otb_wait_recovered_urls';
+  const text = (document.body?.innerText || '').toLowerCase();
+  const match = text.match(/(\\d+)\\s*\\/\\s*(\\d+)\\s*participants\\s+ready/);
+  const key = '__otb_wait_ready_since:' + urlKey;
+  const now = Date.now();
+
+  let recovered = {};
+  try {
+    recovered = JSON.parse(sessionStorage.getItem(recoveredKey) || '{}');
+  } catch {
+    recovered = {};
+  }
+
+  // Cooldown: at most one forced recovery per wait-page URL.
+  if (recovered[urlKey]) {
+    sessionStorage.removeItem(key);
+    return false;
+  }
+
+  if (!match) {
+    sessionStorage.removeItem(key);
+    return false;
+  }
+
+  const ready = Number(match[1]);
+  const total = Number(match[2]);
+  if (!Number.isFinite(ready) || !Number.isFinite(total) || total <= 0 || ready < total) {
+    sessionStorage.removeItem(key);
+    return false;
+  }
+
+  const since = Number(sessionStorage.getItem(key) || 0);
+  if (!since) {
+    sessionStorage.setItem(key, String(now));
+    return false;
+  }
+
+  return (now - since) > 12_000;
+})()`;
+
+const CLEAR_WAIT_PAGE_MARKERS = `(() => {
+  const urlKey = window.location.pathname + window.location.search;
+  sessionStorage.removeItem('__otb_wait_ready_since:' + urlKey);
+  sessionStorage.removeItem('__otb_wait_progress_state:' + urlKey);
+  const w = window;
+  if (w.__otbWaitNudgeTimer) {
+    clearInterval(w.__otbWaitNudgeTimer);
+    w.__otbWaitNudgeTimer = null;
+  }
+})()`;
+
+const MARK_WAIT_PAGE_RECOVERY = `(() => {
+  const urlKey = window.location.pathname + window.location.search;
+  const recoveredKey = '__otb_wait_recovered_urls';
+  let recovered = {};
+  try {
+    recovered = JSON.parse(sessionStorage.getItem(recoveredKey) || '{}');
+  } catch {
+    recovered = {};
+  }
+  recovered[urlKey] = Date.now();
+  sessionStorage.setItem(recoveredKey, JSON.stringify(recovered));
+  sessionStorage.removeItem('__otb_wait_ready_since:' + urlKey);
+})()`;
+
+const WAIT_PAGE_STALE_PROGRESS_GUARD = `(() => {
+  const urlKey = window.location.pathname + window.location.search;
+  const stateKey = '__otb_wait_progress_state:' + urlKey;
+  const text = (document.body?.innerText || '').toLowerCase();
+  const match = text.match(/(\\d+)\\s*\\/\\s*(\\d+)\\s*participants\\s+ready/);
+  const now = Date.now();
+
+  if (!match) {
+    sessionStorage.removeItem(stateKey);
+    return false;
+  }
+
+  const ready = Number(match[1]);
+  const total = Number(match[2]);
+  if (!Number.isFinite(ready) || !Number.isFinite(total) || total <= 0) {
+    sessionStorage.removeItem(stateKey);
+    return false;
+  }
+
+  const ratio = ready + '/' + total;
+  let state = null;
+  try {
+    state = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
+  } catch {
+    state = null;
+  }
+
+  if (!state || state.ratio !== ratio) {
+    sessionStorage.setItem(stateKey, JSON.stringify({
+      ratio,
+      since: now,
+      lastReload: state?.lastReload || 0,
+      reloads: state?.reloads || 0,
+    }));
+    return false;
+  }
+
+  const since = Number(state.since || now);
+  const lastReload = Number(state.lastReload || 0);
+  const reloads = Number(state.reloads || 0);
+
+  // If readiness ratio is unchanged for a while, do a bounded refresh.
+  // Cooldowns reduce websocket churn from repeated reconnects.
+  const unchangedTooLong = (now - since) > 25_000;
+  const cooldownPassed = (now - lastReload) > 25_000;
+  const belowReloadCap = reloads < 3;
+
+  return unchangedTooLong && cooldownPassed && belowReloadCap;
+})()`;
+
+const MARK_WAIT_PAGE_STALE_RECOVERY = `(() => {
+  const urlKey = window.location.pathname + window.location.search;
+  const stateKey = '__otb_wait_progress_state:' + urlKey;
+  const text = (document.body?.innerText || '').toLowerCase();
+  const match = text.match(/(\\d+)\\s*\\/\\s*(\\d+)\\s*participants\\s+ready/);
+  const now = Date.now();
+
+  const ratio = match ? (Number(match[1]) + '/' + Number(match[2])) : 'unknown';
+  let state = null;
+  try {
+    state = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
+  } catch {
+    state = null;
+  }
+
+  sessionStorage.setItem(stateKey, JSON.stringify({
+    ratio: state?.ratio || ratio,
+    since: now,
+    lastReload: now,
+    reloads: Number(state?.reloads || 0) + 1,
+  }));
+})()`;
+
+const WAIT_PAGE_NUDGE_ACTION = `(() => {
+  const w = window;
+  const call = (name) => {
+    const fn = w[name];
+    if (typeof fn !== 'function') return false;
+    try {
+      fn.call(w);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // oTree wait pages often rely on JS polling loops; call known hooks directly.
+  const tick = () => {
+    call('waitForRedirect');
+    call('wait_for_redirect');
+    call('checkWaitPage');
+    call('check_wait_page');
+    call('sendPing');
+  };
+
+  tick();
+  if (!w.__otbWaitNudgeTimer) {
+    w.__otbWaitNudgeTimer = setInterval(tick, 1000);
+  }
 })()`;
 
 // ── Queue / next-round detection guard ──────────────────────
@@ -109,10 +298,15 @@ const TERMINAL_PAGE_GUARD = `(() => {
     return true;
   });
 
+  const waitText = (document.body?.innerText || '').toLowerCase();
+  const waitScript = Array.from(document.scripts || []).some((s) =>
+    /waitforredirect|is_wait_page/i.test(s.textContent || '')
+  );
   const isWaitPage = !!(
     document.querySelector('.otree-wait-page') ||
     document.querySelector('[data-wait-page]') ||
-    document.documentElement.innerHTML.includes('waitForRedirect')
+    waitScript ||
+    (waitText.includes('please wait') && waitText.includes('participants ready'))
   );
 
   return visibleActionButtons.length === 0
@@ -152,6 +346,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // ── waitForPage ─────────────────────────────────────
       waitForPage: {
         onEntry: [
+          { type: 'evaluate', value: CLEAR_WAIT_PAGE_MARKERS },
           { type: 'waitForSelector', selector: 'body', timeout: 10000 },
           { type: 'log', value: 'Page loaded.' },
           { type: 'wait', value: 50 },
@@ -202,6 +397,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       handleWaitPage: {
         onEntry: [
           { type: 'log', value: 'Detected oTree WaitPage — waiting for other players…' },
+          { type: 'evaluate', value: WAIT_PAGE_NUDGE_ACTION },
           { type: 'wait', value: 3000 },
         ],
         transitions: [
@@ -218,18 +414,61 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'waitForPage',
             guard: {
               type: 'custom',
-              fn: `(() => {
-                const isWaitPage = !!(
-                  document.querySelector('.otree-wait-page') ||
-                  document.querySelector('[data-wait-page]') ||
-                  document.documentElement.innerHTML.includes('waitForRedirect')
-                );
-                return !isWaitPage;
-              })()`,
+              fn: EXIT_WAIT_PAGE_GUARD,
+            },
+          },
+          // Full group is ready but the wait page didn't auto-redirect.
+          // Do a controlled refresh to rebind oTree's wait-page polling.
+          {
+            target: 'recoverWaitPage',
+            guard: {
+              type: 'custom',
+              fn: WAIT_PAGE_STUCK_READY_GUARD,
+            },
+          },
+          // Readiness ratio did not move for too long. Reconnect once in a while
+          // to refresh wait-page state and websocket/session linkage.
+          {
+            target: 'recoverWaitPageStale',
+            guard: {
+              type: 'custom',
+              fn: WAIT_PAGE_STALE_PROGRESS_GUARD,
             },
           },
           // Still on wait page — loop and keep waiting
           { target: 'handleWaitPage' },
+        ],
+      },
+
+      // ── recoverWaitPage ───────────────────────────────
+      recoverWaitPage: {
+        onEntry: [
+          { type: 'log', value: 'WaitPage appears stuck at full readiness — refreshing once.' },
+          { type: 'evaluate', value: MARK_WAIT_PAGE_RECOVERY },
+          { type: 'reload', timeout: 10000 },
+          { type: 'wait', value: 1200 },
+        ],
+        transitions: [
+          {
+            target: 'waitForPage',
+            guard: { type: 'elementExists', selector: 'body' },
+          },
+        ],
+      },
+
+      // ── recoverWaitPageStale ───────────────────────────
+      recoverWaitPageStale: {
+        onEntry: [
+          { type: 'log', value: 'WaitPage readiness unchanged for 25s — refreshing to resync.' },
+          { type: 'evaluate', value: MARK_WAIT_PAGE_STALE_RECOVERY },
+          { type: 'reload', timeout: 10000 },
+          { type: 'wait', value: 1200 },
+        ],
+        transitions: [
+          {
+            target: 'waitForPage',
+            guard: { type: 'elementExists', selector: 'body' },
+          },
         ],
       },
 

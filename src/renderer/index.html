@@ -86,6 +86,14 @@
           </div>
           <span class="strategy-grid__hint">Delay between each field interaction (0 = instant, 500+ = demo mode)</span>
         </div>
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="strategy-grid__label" for="strat-jitter">Timing jitter</label>
+          <div class="speed-control">
+            <input id="strat-jitter" type="range" class="speed-control__slider" min="0" max="2000" step="50" value="0" />
+            <span id="strat-jitter-label" class="speed-control__label">0 ms</span>
+          </div>
+          <span class="strategy-grid__hint">Random ±delay added per action for human-like timing (0 = deterministic)</span>
+        </div>
       </div>
 
       <p id="setup-error" class="setup-card__error" aria-live="polite"></p>
@@ -106,6 +114,7 @@
   <div id="toolbar">
     <span class="toolbar__title">oTree Bots</span>
     <button id="btn-logs" class="toolbar__btn toolbar__btn--logs" title="Toggle decision log">&#9776; Logs</button>
+    <button id="btn-overview" class="toolbar__btn toolbar__btn--overview" title="Bird's-eye progress view">Overview</button>
     <span id="toolbar-status" class="toolbar__status">Waiting…</span>
     <button id="btn-restart" class="toolbar__btn toolbar__btn--restart">Restart to Settings</button>
     <button id="btn-stop" class="toolbar__btn toolbar__btn--danger">Stop All</button>
