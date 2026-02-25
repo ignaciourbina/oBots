@@ -142,6 +142,16 @@ export async function executeAction(
       return null;
     }
 
+    // ── clickNamedFormButton ──────────────────────────────
+    // Handles oTree decision pages that use <button name="field" value="x">
+    // instead of <input type="radio">. Randomly selects a button per group
+    // according to the radioStrategy, then clicks it (which also submits the form).
+    case 'clickNamedFormButton': {
+      if (!action.strategyConfig) throw new Error('clickNamedFormButton requires strategyConfig');
+      await clickNamedFormButtonVisible(page, action.strategyConfig);
+      return null;
+    }
+
     default: {
       const _exhaustive: never = action.type;
       throw new Error(`Unknown action type: ${_exhaustive}`);
@@ -377,3 +387,52 @@ function buildSelector(field: { type: string; selector: string; meta: Record<str
 const CSS = globalThis.CSS ?? {
   escape: (s: string) => s.replace(/([^\w-])/g, '\\$1'),
 };
+
+// ── Named form button clicking ─────────────────────────────
+
+/**
+ * Handle oTree decision pages that use <button name="field" value="x"> elements
+ * (e.g. prisoner's dilemma Choice A / Choice B) instead of radio inputs.
+ * Groups buttons by their `name` attribute and applies the radioStrategy to
+ * randomly select one per group, then clicks it (which also submits the form).
+ */
+async function clickNamedFormButtonVisible(page: Page, strategy: BotStrategy): Promise<void> {
+  // Discover named-button groups via a single evaluate call.
+  // Exclude .otree-btn-next and buttons that are pure navigation (no name).
+  const groups = await page.evaluate(() => {
+    const result: Record<string, string[]> = {};
+    document.querySelectorAll<HTMLButtonElement>('button[name]:not(.otree-btn-next)').forEach((btn) => {
+      if (!btn.name || btn.disabled) return;
+      if (!result[btn.name]) result[btn.name] = [];
+      result[btn.name].push(btn.value);
+    });
+    return result;
+  });
+
+  for (const [name, values] of Object.entries(groups)) {
+    if (values.length === 0) continue;
+
+    let chosenValue: string;
+    switch (strategy.radioStrategy) {
+      case 'first':  chosenValue = values[0]; break;
+      case 'last':   chosenValue = values[values.length - 1]; break;
+      case 'random': chosenValue = values[Math.floor(Math.random() * values.length)]; break;
+    }
+
+    // Escape CSS special characters in the value attribute selector.
+    const safeValue = chosenValue.replace(/["\\]/g, '\\$&');
+    const selector = `button[name="${name}"][value="${safeValue}"]`;
+
+    // Click the button and wait for the resulting form-submit navigation.
+    await Promise.all([
+      page.waitForNavigation({ timeout: 10_000, waitUntil: 'domcontentloaded' }).catch(() => {
+        // Navigation may not happen on SPAs or if already navigated — that's fine.
+      }),
+      page.click(selector),
+    ]);
+
+    // Process one group only: oTree decision pages have a single named-button
+    // group that both sets the field value AND submits the form.
+    break;
+  }
+}

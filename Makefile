@@ -10,7 +10,23 @@ OTREE_ISOLATE_DB ?= 1
 OTREE_CREATE_SESSION ?= 1
 OTREE_SESSION_CONFIG ?= stress_multi_app_suite
 
-.PHONY: run dev build clean test lint watch otree up package package-win package-linux
+.PHONY: help run dev build clean test lint watch otree up package package-win package-linux
+
+help:
+	@echo "Available targets:"
+	@echo "  help         Show this help message"
+	@echo "  run          Run bots against OTREE_SESSION_URL"
+	@echo "  dev          Run bots with verbose logging"
+	@echo "  otree        Start oTree devserver"
+	@echo "  up           Start oTree + launch Electron app"
+	@echo "  build        Build TypeScript and renderer assets"
+	@echo "  watch        Run TypeScript watch mode"
+	@echo "  test         Run tests"
+	@echo "  lint         Run type-check (no emit)"
+	@echo "  clean        Remove build artifacts"
+	@echo "  package      Package Electron app for current platform"
+	@echo "  package-linux Package Electron app for Linux"
+	@echo "  package-win  Package Electron app for Windows"
 
 # Run bots against the session URL from .env
 run: build

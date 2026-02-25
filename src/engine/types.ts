@@ -57,6 +57,7 @@ export type ActionType =
   | 'reload'
   | 'evaluate'
   | 'fillFormFields'
+  | 'clickNamedFormButton'
   | 'screenshot'
   | 'log';
 

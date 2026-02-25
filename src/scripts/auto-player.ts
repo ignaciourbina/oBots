@@ -243,6 +243,19 @@ const HAS_FORM_FIELDS_GUARD = `(() => {
   return inputs.length > 0;
 })()`;
 
+// ── Named-button form detection guard ───────────────────────
+// Detects oTree decision pages that use <button name="field" value="x">
+// (e.g. "I choose Choice A / Choice B") instead of <input type="radio">.
+// These buttons set the field value AND submit the form when clicked.
+
+const HAS_NAMED_BUTTONS_GUARD = `(() => {
+  const buttons = document.querySelectorAll('button[name]:not(.otree-btn-next)');
+  return Array.from(buttons).some((el) => {
+    const btn = el;
+    return btn.name && btn.name !== '' && !btn.disabled;
+  });
+})()`;
+
 // ── Terminal-page detection guard ───────────────────────────
 
 const TERMINAL_PAGE_GUARD = `(() => {
@@ -372,6 +385,13 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'queueNextRound',
             guard: { type: 'custom', fn: QUEUE_NEXT_ROUND_GUARD },
           },
+          // oTree named-button decision pages (e.g. <button name="cooperate" value="True">)
+          // Must be checked before fillAndSubmit — named buttons act as both
+          // the field input and the form submit, so no separate submit click is needed.
+          {
+            target: 'clickNamedButton',
+            guard: { type: 'custom', fn: HAS_NAMED_BUTTONS_GUARD },
+          },
           // Form page — fill fields
           {
             target: 'fillAndSubmit',
@@ -481,6 +501,34 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
             timeout: 5000,
           },
+          { type: 'wait', value: 200 },
+        ],
+        transitions: [
+          {
+            target: 'done',
+            guard: { type: 'urlContains', value: 'OutOfRangeNotification' },
+          },
+          {
+            target: 'done',
+            guard: { type: 'custom', fn: TERMINAL_PAGE_GUARD },
+          },
+          {
+            target: 'waitForPage',
+            guard: { type: 'elementExists', selector: 'body' },
+            delay: 200,
+          },
+        ],
+      },
+
+      // ── clickNamedButton ────────────────────────────────
+      // Handles oTree pages where the decision is expressed as
+      //   <button name="field" value="x">Label</button>
+      // Clicking one of these buttons both sets the field value and
+      // submits the form, so no separate "clickNext" step is needed.
+      clickNamedButton: {
+        onEntry: [
+          { type: 'log', value: `Clicking named form button (${strategy.name} strategy)...` },
+          { type: 'clickNamedFormButton', strategyConfig: strategy },
           { type: 'wait', value: 200 },
         ],
         transitions: [
