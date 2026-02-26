@@ -320,6 +320,8 @@ export interface AppConfig {
   url: string;
   urlInjection?: UrlInjectionConfig;
   playerCount: number;
+  /** Percentage of bots to randomly drop during a run (0-100). */
+  dropoutRatePercent: number;
   scriptPath: string;
   cols?: number;
   delayMultiplier: number;
@@ -337,12 +339,16 @@ export interface UrlInjectionConfig {
 
 export const DEFAULTS = {
   playerCount: 2,
+  dropoutRatePercent: 0,
   gridCols: 'auto' as const,
   actionDelayMultiplier: 1.0,
   pollIntervalMs: 250,
   maxPollTimeMs: 120_000,
   botStateStaleTimeoutMs: 60_000,
   botStateStaleCheckIntervalMs: 5_000,
+  // Dropout simulation window for bots selected by dropoutRatePercent.
+  dropoutMinDelayMs: 1_500,
+  dropoutMaxDelayMs: 10_000,
   // Base minimum interval for screenshot attempts.
   screenshotIntervalMs: 16,
   // Global FPS budget for all bots combined.

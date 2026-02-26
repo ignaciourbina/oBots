@@ -49,6 +49,7 @@ let repeatTotalRounds = 1;
 let lastRunConfig: AppConfig | null = null;
 let isRepeating = false;
 let staleBotTimer: ReturnType<typeof setInterval> | null = null;
+let dropoutTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
 interface OverviewSnapshot {
   timestamp: number;
@@ -149,12 +150,18 @@ function loadBotScript(scriptPath: string): BotScript {
 function normalizeStartPayload(payload: StartPayload): StartPayload {
   const url = payload.url?.trim();
   const playerCount = Number(payload.playerCount);
+  const dropoutRatePercent = payload.dropoutRatePercent == null
+    ? undefined
+    : Number(payload.dropoutRatePercent);
 
   if (!url) {
     throw new Error('URL is required.');
   }
   if (!Number.isInteger(playerCount) || playerCount < 1) {
     throw new Error('Player count must be an integer >= 1.');
+  }
+  if (dropoutRatePercent != null && (!Number.isFinite(dropoutRatePercent) || dropoutRatePercent < 0 || dropoutRatePercent > 100)) {
+    throw new Error('Dropout % must be between 0 and 100.');
   }
   if (payload.urlInjection?.enabled) {
     try {
@@ -168,9 +175,37 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
     url,
     urlInjection: payload.urlInjection,
     playerCount,
+    dropoutRatePercent,
     strategy: payload.strategy,
     repeatRounds: payload.repeatRounds,
   };
+}
+
+function clearDropoutTimers(): void {
+  for (const timer of dropoutTimers.values()) {
+    clearTimeout(timer);
+  }
+  dropoutTimers.clear();
+}
+
+function clampDropoutRate(percent: number | undefined): number {
+  const value = percent == null ? DEFAULTS.dropoutRatePercent : Number(percent);
+  if (!Number.isFinite(value)) return DEFAULTS.dropoutRatePercent;
+  return Math.max(0, Math.min(100, value));
+}
+
+function sampleDropoutBotIds(allBotIds: string[], count: number): Set<string> {
+  if (count <= 0 || allBotIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const ids = [...allBotIds];
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+
+  return new Set(ids.slice(0, Math.min(count, ids.length)));
 }
 
 function randomToken(length = 8): string {
@@ -220,15 +255,18 @@ function buildBotNavigationUrl(
  * Launch bots for a validated run config.
  */
 async function launchBots(config: AppConfig): Promise<void> {
+  clearDropoutTimers();
   currentPlayerCount = config.playerCount;
   const runContext = {
     runTs: String(Date.now()),
     runRand: randomToken(8),
   };
+  const dropoutRatePercent = clampDropoutRate(config.dropoutRatePercent);
 
   log.info('Starting run', {
     url: config.url,
     players: config.playerCount,
+    dropoutRatePercent,
     strategy: config.strategy.name,
     cols: config.cols ?? 'auto',
     delay: config.delayMultiplier,
@@ -251,6 +289,24 @@ async function launchBots(config: AppConfig): Promise<void> {
     }),
   );
 
+  const dropoutCount = Math.min(
+    bots.length,
+    Math.round((dropoutRatePercent / 100) * bots.length),
+  );
+  const dropoutBotIds = sampleDropoutBotIds(
+    bots.map((bot) => bot.id),
+    dropoutCount,
+  );
+
+  if (dropoutBotIds.size > 0) {
+    log.info(
+      'Dropout simulation armed: %s%% => %d/%d bots',
+      dropoutRatePercent,
+      dropoutBotIds.size,
+      bots.length,
+    );
+  }
+
   // Launch all bots concurrently — each gets its own browser + page
   const launchPromises = bots.map(async (bot) => {
     log.info('Launching bot #%d (%s)', bot.index, bot.id);
@@ -260,6 +316,39 @@ async function launchBots(config: AppConfig): Promise<void> {
       await botRunner.launchBrowser(bot);
       await botRunner.navigate(bot, navigationUrl);
       await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0);
+
+      if (dropoutBotIds.has(bot.id)) {
+        const minDelay = DEFAULTS.dropoutMinDelayMs;
+        const maxDelay = Math.max(minDelay, DEFAULTS.dropoutMaxDelayMs);
+        const delayMs = minDelay + Math.floor(Math.random() * (maxDelay - minDelay + 1));
+
+        const timer = setTimeout(() => {
+          dropoutTimers.delete(bot.id);
+          const currentBot = registry.getBot(bot.id);
+          if (!currentBot) return;
+          if (currentBot.status === 'done' || currentBot.status === 'error') return;
+
+          const delaySeconds = (delayMs / 1000).toFixed(1);
+          log.warn(
+            'Simulated dropout fired for bot #%d (%s) after %ss',
+            bot.index,
+            bot.id,
+            delaySeconds,
+          );
+          botRunner.forceFinishBot(
+            bot.id,
+            `simulated dropout after ${delaySeconds}s (${dropoutRatePercent}% per run)`,
+          );
+        }, delayMs);
+
+        dropoutTimers.set(bot.id, timer);
+        log.info(
+          'Scheduled simulated dropout for bot #%d (%s) in %dms',
+          bot.index,
+          bot.id,
+          delayMs,
+        );
+      }
     } catch (err) {
       log.error('Failed to start bot #%d: %s', bot.index, err instanceof Error ? err.message : String(err));
       registry.setError(bot.id, err instanceof Error ? err.message : String(err));
@@ -303,6 +392,7 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
       url: start.url,
       urlInjection: start.urlInjection,
       playerCount: start.playerCount,
+      dropoutRatePercent: clampDropoutRate(start.dropoutRatePercent ?? baseConfig.dropoutRatePercent),
       strategy,
     };
 
@@ -349,6 +439,7 @@ async function handleRepeatRound(): Promise<void> {
   log.info('Round %d/%d complete — starting next round…', repeatCurrentRound, repeatTotalRounds);
 
   // Tear down current round
+  clearDropoutTimers();
   await botRunner.stopAll();
   currentPlayerCount = 0;
 
@@ -391,6 +482,7 @@ async function handleRestartRequest(): Promise<void> {
 
   runStarting = true;
   try {
+    clearDropoutTimers();
     await botRunner.stopAll();
     currentPlayerCount = 0;
     runStarted = false;
@@ -566,6 +658,7 @@ app.whenReady().then(async () => {
     // Guard with isRepeating to prevent re-entrant calls: stopAll() triggers
     // onStatusChange → allFinished() → allDoneCallback, which would recurse.
     botRunner.setAllDoneCallback(() => {
+      clearDropoutTimers();
       if (!isRepeating && repeatCurrentRound < repeatTotalRounds) {
         isRepeating = true;
         void handleRepeatRound()
@@ -635,6 +728,7 @@ app.whenReady().then(async () => {
       await handleStartRequest({
         url: baseConfig.url,
         playerCount: baseConfig.playerCount,
+        dropoutRatePercent: baseConfig.dropoutRatePercent,
       });
     }
   } catch (err) {
@@ -645,6 +739,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   stopStaleBotWatcher();
+  clearDropoutTimers();
   removeIpcHandlers();
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
   ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
@@ -658,6 +753,7 @@ app.on('window-all-closed', async () => {
 
 app.on('before-quit', async () => {
   stopStaleBotWatcher();
+  clearDropoutTimers();
   stopOverviewTicker();
   if (overviewWindow && !overviewWindow.isDestroyed()) {
     overviewWindow.close();

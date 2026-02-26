@@ -40,6 +40,11 @@ export function parseCLI(argv?: string[]): AppConfig {
       description: 'Number of bot players',
       default: DEFAULTS.playerCount,
     })
+    .option('dropout-rate', {
+      type: 'number',
+      description: 'Percent of bots to randomly drop during each run (0-100)',
+      default: DEFAULTS.dropoutRatePercent,
+    })
     .option('script', {
       alias: 's',
       type: 'string',
@@ -86,12 +91,18 @@ export function parseCLI(argv?: string[]): AppConfig {
     throw new Error('--headless requires --url because the setup UI is not shown.');
   }
 
+  const dropoutRate = Number(args['dropout-rate']);
+  if (!Number.isFinite(dropoutRate) || dropoutRate < 0 || dropoutRate > 100) {
+    throw new Error('--dropout-rate must be a number between 0 and 100.');
+  }
+
   const strategyKey = (args.strategy as string) ?? 'random';
   const strategy = STRATEGY_PRESETS[strategyKey] ?? DEFAULT_STRATEGY;
 
   return {
     url: args.url as string,
     playerCount: args.players as number,
+    dropoutRatePercent: dropoutRate,
     scriptPath,
     cols: args.cols as number | undefined,
     delayMultiplier: args.delay as number,

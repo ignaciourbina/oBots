@@ -34,6 +34,7 @@ interface StartCommandPayload {
   url: string;
   urlInjection?: UrlInjectionPayload;
   playerCount: number;
+  dropoutRatePercent: number;
   strategy: StrategyPayload;
   repeatRounds: number;
 }
@@ -112,6 +113,7 @@ const setupParticipantTemplate = document.getElementById('setup-participant-temp
 const setupAssignmentTemplate = document.getElementById('setup-assignment-template') as HTMLInputElement;
 const setupProjectTemplate = document.getElementById('setup-project-template') as HTMLInputElement;
 const setupPlayersInput = document.getElementById('setup-players') as HTMLInputElement;
+const setupDropoutRateInput = document.getElementById('setup-dropout-rate') as HTMLInputElement;
 const setupStrategySelect = document.getElementById('setup-strategy') as HTMLSelectElement;
 const strategyDetails = document.getElementById('strategy-details') as HTMLDivElement;
 const stratNumberSelect = document.getElementById('strat-number') as HTMLSelectElement;
@@ -251,6 +253,7 @@ function resetToSetupScreen(): void {
 function readSetupPayload(): StartCommandPayload | null {
   const url = setupUrlInput.value.trim();
   const playerCount = Number(setupPlayersInput.value);
+  const dropoutRatePercent = Number(setupDropoutRateInput.value);
 
   if (!url) {
     showSetupError('Game URL is required.');
@@ -258,6 +261,10 @@ function readSetupPayload(): StartCommandPayload | null {
   }
   if (!Number.isInteger(playerCount) || playerCount < 1) {
     showSetupError('Number of bots must be an integer >= 1.');
+    return null;
+  }
+  if (!Number.isFinite(dropoutRatePercent) || dropoutRatePercent < 0 || dropoutRatePercent > 100) {
+    showSetupError('Dropout % must be between 0 and 100.');
     return null;
   }
 
@@ -276,6 +283,7 @@ function readSetupPayload(): StartCommandPayload | null {
     url,
     urlInjection,
     playerCount,
+    dropoutRatePercent,
     strategy: readStrategy(),
     repeatRounds: Number(setupRepeatInput.value) || 1,
   };
@@ -288,6 +296,7 @@ function initializeSetupForm(): void {
   const defaults = getSetupDefaults();
   setupUrlInput.value = defaults.url;
   setupPlayersInput.value = String(defaults.playerCount);
+  setupDropoutRateInput.value = '0';
   setupUrlInjectionEnabled.checked = /\/landing(?:$|\?)/.test(defaults.url);
   urlInjectionFields.classList.toggle('hidden', !setupUrlInjectionEnabled.checked);
   btnRestart.disabled = true;

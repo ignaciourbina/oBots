@@ -55,6 +55,12 @@
       </div>
       <span class="strategy-grid__hint" style="display:block; margin-top:2px;">Auto-restart with identical settings when all bots finish (1 = single run)</span>
 
+      <label class="setup-card__label" for="setup-dropout-rate">Dropout % per run</label>
+      <input id="setup-dropout-rate" class="setup-card__input" type="number" min="0" max="100" step="1" value="0" />
+      <span class="strategy-grid__hint" style="display:block; margin-top:-2px;">
+        Randomly force-stop this percentage of bots at random times during each run (0 = disabled).
+      </span>
+
       <label class="setup-card__label" for="setup-strategy">Strategy preset</label>
       <select id="setup-strategy" class="setup-card__input">
         <option value="random">Random</option>

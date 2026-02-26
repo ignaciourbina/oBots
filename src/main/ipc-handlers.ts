@@ -30,6 +30,7 @@ export interface StartPayload {
   url: string;
   urlInjection?: UrlInjectionConfig;
   playerCount: number;
+  dropoutRatePercent?: number;
   strategy?: StrategyPayload;
   repeatRounds?: number;
 }
