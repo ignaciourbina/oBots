@@ -9,6 +9,7 @@ import { IpcChannel } from '../engine/types';
 import { BotRunner } from './bot-runner';
 import { createChildLogger } from './logger';
 import { diagRenderer } from './screenshot-diag';
+import type { UrlInjectionConfig } from '../engine/types';
 
 const log = createChildLogger('ipc');
 
@@ -27,6 +28,7 @@ export interface StrategyPayload {
 
 export interface StartPayload {
   url: string;
+  urlInjection?: UrlInjectionConfig;
   playerCount: number;
   strategy?: StrategyPayload;
   repeatRounds?: number;

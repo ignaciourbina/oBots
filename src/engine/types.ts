@@ -317,6 +317,7 @@ export const DEFAULT_STRATEGY: BotStrategy = STRATEGY_PRESETS.random;
 
 export interface AppConfig {
   url: string;
+  urlInjection?: UrlInjectionConfig;
   playerCount: number;
   scriptPath: string;
   cols?: number;
@@ -324,6 +325,13 @@ export interface AppConfig {
   headless: boolean;
   debug: boolean;
   strategy: BotStrategy;
+}
+
+export interface UrlInjectionConfig {
+  enabled: boolean;
+  participantIdTemplate: string;
+  assignmentIdTemplate: string;
+  projectIdTemplate: string;
 }
 
 export const DEFAULTS = {

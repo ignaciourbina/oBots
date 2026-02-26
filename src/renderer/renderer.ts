@@ -32,9 +32,17 @@ interface StrategyPayload {
 
 interface StartCommandPayload {
   url: string;
+  urlInjection?: UrlInjectionPayload;
   playerCount: number;
   strategy: StrategyPayload;
   repeatRounds: number;
+}
+
+interface UrlInjectionPayload {
+  enabled: boolean;
+  participantIdTemplate: string;
+  assignmentIdTemplate: string;
+  projectIdTemplate: string;
 }
 
 interface GridLayout {
@@ -98,6 +106,11 @@ const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
 const setupScreen = document.getElementById('setup-screen') as HTMLDivElement;
 const setupForm = document.getElementById('setup-form') as HTMLFormElement;
 const setupUrlInput = document.getElementById('setup-url') as HTMLInputElement;
+const setupUrlInjectionEnabled = document.getElementById('setup-url-injection-enabled') as HTMLInputElement;
+const urlInjectionFields = document.getElementById('url-injection-fields') as HTMLDivElement;
+const setupParticipantTemplate = document.getElementById('setup-participant-template') as HTMLInputElement;
+const setupAssignmentTemplate = document.getElementById('setup-assignment-template') as HTMLInputElement;
+const setupProjectTemplate = document.getElementById('setup-project-template') as HTMLInputElement;
 const setupPlayersInput = document.getElementById('setup-players') as HTMLInputElement;
 const setupStrategySelect = document.getElementById('setup-strategy') as HTMLSelectElement;
 const strategyDetails = document.getElementById('strategy-details') as HTMLDivElement;
@@ -248,8 +261,24 @@ function readSetupPayload(): StartCommandPayload | null {
     return null;
   }
 
+  let urlInjection: UrlInjectionPayload | undefined;
+  if (setupUrlInjectionEnabled.checked) {
+    urlInjection = {
+      enabled: true,
+      participantIdTemplate: (setupParticipantTemplate.value || '').trim(),
+      assignmentIdTemplate: (setupAssignmentTemplate.value || '').trim(),
+      projectIdTemplate: (setupProjectTemplate.value || '').trim(),
+    };
+  }
+
   showSetupError('');
-  return { url, playerCount, strategy: readStrategy(), repeatRounds: Number(setupRepeatInput.value) || 1 };
+  return {
+    url,
+    urlInjection,
+    playerCount,
+    strategy: readStrategy(),
+    repeatRounds: Number(setupRepeatInput.value) || 1,
+  };
 }
 
 /**
@@ -259,6 +288,8 @@ function initializeSetupForm(): void {
   const defaults = getSetupDefaults();
   setupUrlInput.value = defaults.url;
   setupPlayersInput.value = String(defaults.playerCount);
+  setupUrlInjectionEnabled.checked = /\/landing(?:$|\?)/.test(defaults.url);
+  urlInjectionFields.classList.toggle('hidden', !setupUrlInjectionEnabled.checked);
   btnRestart.disabled = true;
   btnStop.disabled = true;
   toolbarStatus.textContent = 'Configure run and click Launch Run';
@@ -289,6 +320,10 @@ function initializeSetupForm(): void {
   // Jitter slider label sync
   stratJitterSlider.addEventListener('input', () => {
     stratJitterLabel.textContent = `${stratJitterSlider.value} ms`;
+  });
+
+  setupUrlInjectionEnabled.addEventListener('change', () => {
+    urlInjectionFields.classList.toggle('hidden', !setupUrlInjectionEnabled.checked);
   });
 }
 

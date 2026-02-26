@@ -19,6 +19,29 @@
       <label class="setup-card__label" for="setup-url">Game URL</label>
       <input id="setup-url" class="setup-card__input" type="url" placeholder="http://localhost:8000/join/abc123" required />
 
+      <label class="setup-card__check" for="setup-url-injection-enabled">
+        <input id="setup-url-injection-enabled" type="checkbox" />
+        Inject landing query fields (participantId / assignmentId / projectId)
+      </label>
+      <span class="strategy-grid__hint" style="display:block; margin-top:-4px;">
+        Use with URLs like `https://.../landing`. Templates support `{bot}`, `{bot0}`, `{runTs}`, `{runRand}`, `{rand}`.
+      </span>
+
+      <div id="url-injection-fields" class="strategy-grid hidden">
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="setup-participant-template">participantId template</label>
+          <input id="setup-participant-template" class="setup-card__input setup-card__input--sm" type="text" value="participant-{runTs}-{bot}-{rand}" />
+        </div>
+        <div class="strategy-grid__field">
+          <label class="strategy-grid__label" for="setup-assignment-template">assignmentId template</label>
+          <input id="setup-assignment-template" class="setup-card__input setup-card__input--sm" type="text" value="assignment-{runTs}-{bot}" />
+        </div>
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="strategy-grid__label" for="setup-project-template">projectId template</label>
+          <input id="setup-project-template" class="setup-card__input setup-card__input--sm" type="text" value="project-{runTs}" />
+        </div>
+      </div>
+
       <label class="setup-card__label" for="setup-players">Number of bots</label>
       <input id="setup-players" class="setup-card__input" type="number" min="1" step="1" required />
 

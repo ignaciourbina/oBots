@@ -6,7 +6,7 @@
 
 import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { AppConfig, BotScript, DEFAULT_STRATEGY, BotStrategy, IpcChannel } from '../engine/types';
+import { AppConfig, BotScript, DEFAULT_STRATEGY, BotStrategy, IpcChannel, UrlInjectionConfig } from '../engine/types';
 import { parseCLI } from './cli';
 import { GridManager } from './grid-manager';
 import { SessionRegistry } from './session-registry';
@@ -152,8 +152,64 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
   if (!Number.isInteger(playerCount) || playerCount < 1) {
     throw new Error('Player count must be an integer >= 1.');
   }
+  if (payload.urlInjection?.enabled) {
+    try {
+      void new URL(url);
+    } catch {
+      throw new Error('URL injection requires an absolute URL (including http:// or https://).');
+    }
+  }
 
-  return { url, playerCount, strategy: payload.strategy, repeatRounds: payload.repeatRounds };
+  return {
+    url,
+    urlInjection: payload.urlInjection,
+    playerCount,
+    strategy: payload.strategy,
+    repeatRounds: payload.repeatRounds,
+  };
+}
+
+function randomToken(length = 8): string {
+  const token = Math.random().toString(36).slice(2);
+  if (token.length >= length) return token.slice(0, length);
+  return (token + Math.random().toString(36).slice(2)).slice(0, length);
+}
+
+function resolveInjectionTemplate(
+  template: string,
+  botIndex: number,
+  runContext: { runTs: string; runRand: string },
+): string {
+  return template
+    .replaceAll('{bot}', String(botIndex + 1))
+    .replaceAll('{bot0}', String(botIndex))
+    .replaceAll('{runTs}', runContext.runTs)
+    .replaceAll('{runRand}', runContext.runRand)
+    .replaceAll('{ts}', String(Date.now()))
+    .replaceAll('{rand}', randomToken(6));
+}
+
+function buildBotNavigationUrl(
+  baseUrl: string,
+  botIndex: number,
+  urlInjection: UrlInjectionConfig | undefined,
+  runContext: { runTs: string; runRand: string },
+): string {
+  if (!urlInjection?.enabled) {
+    return baseUrl;
+  }
+
+  const url = new URL(baseUrl);
+
+  const participantTemplate = urlInjection.participantIdTemplate?.trim() || 'participant-{runTs}-{bot}-{rand}';
+  const assignmentTemplate = urlInjection.assignmentIdTemplate?.trim() || 'assignment-{runTs}-{bot}';
+  const projectTemplate = urlInjection.projectIdTemplate?.trim() || 'project-{runTs}';
+
+  url.searchParams.set('participantId', resolveInjectionTemplate(participantTemplate, botIndex, runContext));
+  url.searchParams.set('assignmentId', resolveInjectionTemplate(assignmentTemplate, botIndex, runContext));
+  url.searchParams.set('projectId', resolveInjectionTemplate(projectTemplate, botIndex, runContext));
+
+  return url.toString();
 }
 
 /**
@@ -161,6 +217,10 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
  */
 async function launchBots(config: AppConfig): Promise<void> {
   currentPlayerCount = config.playerCount;
+  const runContext = {
+    runTs: String(Date.now()),
+    runRand: randomToken(8),
+  };
 
   log.info('Starting run', {
     url: config.url,
@@ -192,8 +252,9 @@ async function launchBots(config: AppConfig): Promise<void> {
     log.info('Launching bot #%d (%s)', bot.index, bot.id);
 
     try {
+      const navigationUrl = buildBotNavigationUrl(config.url, bot.index, config.urlInjection, runContext);
       await botRunner.launchBrowser(bot);
-      await botRunner.navigate(bot, config.url);
+      await botRunner.navigate(bot, navigationUrl);
       await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0);
     } catch (err) {
       log.error('Failed to start bot #%d: %s', bot.index, err instanceof Error ? err.message : String(err));
@@ -236,6 +297,7 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
     const runConfig: AppConfig = {
       ...baseConfig,
       url: start.url,
+      urlInjection: start.urlInjection,
       playerCount: start.playerCount,
       strategy,
     };
