@@ -1,4 +1,4 @@
-include .env
+-include .env
 export
 
 VENV_BIN := $(CURDIR)/.venv/bin
