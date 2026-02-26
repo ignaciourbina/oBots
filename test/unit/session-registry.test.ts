@@ -118,4 +118,45 @@ describe('SessionRegistry', () => {
       vi.useRealTimers();
     }
   });
+
+  it('does not refresh stale timer on self-transition to same state', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    try {
+      const registry = new SessionRegistry();
+      const bot = registry.createBot(0, makeScript());
+      registry.updateStatus(bot.id, 'running');
+
+      vi.setSystemTime(new Date('2026-01-01T00:00:30.000Z'));
+      registry.updateCurrentState(bot.id, 'start');
+
+      vi.setSystemTime(new Date('2026-01-01T00:01:05.000Z'));
+      const staleBots = registry.getStaleRunningBots(60_000);
+      expect(staleBots.map((b) => b.id)).toEqual([bot.id]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('detects running bots that exceed max runtime', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    try {
+      const registry = new SessionRegistry();
+      const overdue = registry.createBot(0, makeScript());
+      registry.updateStatus(overdue.id, 'running');
+
+      vi.setSystemTime(new Date('2026-01-01T00:04:00.000Z'));
+      const healthy = registry.createBot(1, makeScript());
+      registry.updateStatus(healthy.id, 'running');
+
+      vi.setSystemTime(new Date('2026-01-01T00:05:10.000Z'));
+      const overdueBots = registry.getOverdueRunningBots(300_000);
+      expect(overdueBots.map((b) => b.id)).toEqual([overdue.id]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -29,12 +29,14 @@ export class SessionRegistry {
    */
   createBot(index: number, script: BotScript): BotInstance {
     const id = uuidv4();
+    const now = Date.now();
     const bot: BotInstance = {
       id,
       index,
+      createdAt: now,
       script,
       currentState: script.initialState,
-      lastStateChangeAt: Date.now(),
+      lastStateChangeAt: now,
       status: 'idle',
       browser: null,
       page: null,
@@ -82,8 +84,13 @@ export class SessionRegistry {
   updateCurrentState(id: string, state: string): void {
     const bot = this.bots.get(id);
     if (bot) {
+      // Only refresh stale-watchdog timestamp when state truly changes.
+      // Self-loops should still be considered stale after timeout.
+      const changed = bot.currentState !== state;
       bot.currentState = state;
-      bot.lastStateChangeAt = Date.now();
+      if (changed) {
+        bot.lastStateChangeAt = Date.now();
+      }
     }
   }
 
@@ -101,6 +108,22 @@ export class SessionRegistry {
       }
     }
     return stale;
+  }
+
+  /**
+   * Return running bots that exceeded maximum runtime budget.
+   */
+  getOverdueRunningBots(maxRuntimeMs: number, nowMs: number = Date.now()): BotInstance[] {
+    const overdue: BotInstance[] = [];
+    for (const bot of this.bots.values()) {
+      if (bot.status !== 'running') {
+        continue;
+      }
+      if ((nowMs - bot.createdAt) >= maxRuntimeMs) {
+        overdue.push(bot);
+      }
+    }
+    return overdue;
   }
 
   /**

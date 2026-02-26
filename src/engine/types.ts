@@ -117,6 +117,7 @@ export interface LogEntry {
 export interface BotInstance {
   id: string;
   index: number;
+  createdAt: number;
   script: BotScript;
   currentState: string;
   lastStateChangeAt: number;
@@ -344,6 +345,11 @@ export const DEFAULTS = {
   actionDelayMultiplier: 1.0,
   pollIntervalMs: 250,
   maxPollTimeMs: 120_000,
+  // If a bot keeps running beyond this budget, watchdog force-drops it so
+  // repeat rounds can continue instead of waiting indefinitely.
+  botMaxRuntimeMs: 300_000,
+  // If state does not actually change for this long while status=running,
+  // watchdog force-drops the bot.
   botStateStaleTimeoutMs: 60_000,
   botStateStaleCheckIntervalMs: 5_000,
   // Dropout simulation window for bots selected by dropoutRatePercent.

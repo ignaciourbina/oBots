@@ -505,8 +505,11 @@ function checkForStaleBots(): void {
   }
 
   const now = Date.now();
+  const handled = new Set<string>();
+
   const staleBots = registry.getStaleRunningBots(DEFAULTS.botStateStaleTimeoutMs, now);
   for (const bot of staleBots) {
+    handled.add(bot.id);
     const staleForMs = now - bot.lastStateChangeAt;
     const staleForSec = Math.round(staleForMs / 1000);
     log.warn(
@@ -519,6 +522,27 @@ function checkForStaleBots(): void {
     botRunner.forceFinishBot(
       bot.id,
       `no state change for ${staleForSec}s (timeout ${Math.round(DEFAULTS.botStateStaleTimeoutMs / 1000)}s)`,
+      'dropped',
+    );
+  }
+
+  const overdueBots = registry.getOverdueRunningBots(DEFAULTS.botMaxRuntimeMs, now);
+  for (const bot of overdueBots) {
+    if (handled.has(bot.id)) {
+      continue;
+    }
+    const runtimeMs = now - bot.createdAt;
+    const runtimeSec = Math.round(runtimeMs / 1000);
+    log.warn(
+      'Bot #%d (%s) exceeded runtime budget (%ds); force-finishing',
+      bot.index,
+      bot.id,
+      runtimeSec,
+    );
+    botRunner.forceFinishBot(
+      bot.id,
+      `runtime budget exceeded at ${runtimeSec}s (timeout ${Math.round(DEFAULTS.botMaxRuntimeMs / 1000)}s)`,
+      'dropped',
     );
   }
 }

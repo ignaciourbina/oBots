@@ -7,10 +7,10 @@
     "otree-bots": "./dist/main/launcher.js"
   },
   "scripts": {
-    "build": "tsc && cp src/renderer/index.html src/renderer/styles.css src/renderer/focus.html src/renderer/bot-view.html src/renderer/overview.html dist/renderer/",
+    "build": "mkdir -p dist/renderer && tsc && cp -v src/renderer/index.html src/renderer/styles.css src/renderer/focus.html src/renderer/bot-view.html src/renderer/overview.html dist/renderer/",
     "watch": "tsc --watch",
     "start": "npm run build && electron dist/main/index.js",
-    "dev": "tsc && cp src/renderer/index.html src/renderer/styles.css src/renderer/focus.html src/renderer/bot-view.html src/renderer/overview.html dist/renderer/ && electron dist/main/index.js --verbose",
+    "dev": "npm run build && electron dist/main/index.js --verbose",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:e2e": "vitest run test/e2e",
