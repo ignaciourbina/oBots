@@ -356,7 +356,12 @@ function updateBotStatus(id: string, status: string, realIndex?: number): void {
   state.status = status;
 
   // Track finished count
-  if ((status === 'done' || status === 'error') && oldStatus !== 'done' && oldStatus !== 'error') {
+  if (
+    (status === 'done' || status === 'dropped' || status === 'error')
+    && oldStatus !== 'done'
+    && oldStatus !== 'dropped'
+    && oldStatus !== 'error'
+  ) {
     finishedCount++;
   }
 

@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('botViewApi', {
     ipcRenderer.on(CH.BOTVIEW_INFO, (_event, info) => cb(info));
   },
 
-  // Status change (running/paused/done/error)
+  // Status change (running/paused/done/dropped/error)
   onBotStatus: (cb: (status: string) => void) => {
     ipcRenderer.on(CH.BOTVIEW_STATUS, (_event, status: string) => cb(status));
   },

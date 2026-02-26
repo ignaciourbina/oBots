@@ -40,14 +40,14 @@ describe('SessionRegistry', () => {
     expect(updated?.logs).toHaveLength(1);
   });
 
-  it('computes allFinished only when all are done/error', () => {
+  it('computes allFinished only when all are done/dropped/error', () => {
     const registry = new SessionRegistry();
     const a = registry.createBot(0, makeScript());
     const b = registry.createBot(1, makeScript());
 
     expect(registry.allFinished()).toBe(false);
 
-    registry.updateStatus(a.id, 'done');
+    registry.updateStatus(a.id, 'dropped');
     expect(registry.allFinished()).toBe(false);
 
     registry.setError(b.id, 'boom');

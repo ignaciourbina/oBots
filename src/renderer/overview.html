@@ -330,6 +330,12 @@
       border-color: rgba(72, 209, 139, 0.42);
     }
 
+    .pill--dropped {
+      color: #d0f0ff;
+      background: rgba(77, 168, 255, 0.17);
+      border-color: rgba(77, 168, 255, 0.45);
+    }
+
     .pill--paused {
       color: #ffe4a5;
       background: rgba(255, 190, 77, 0.16);
@@ -472,7 +478,7 @@
 
     const statusClass = (value) => {
       const key = String(value || 'unknown').toLowerCase();
-      if (['running', 'done', 'paused', 'error', 'idle'].includes(key)) return key;
+      if (['running', 'done', 'dropped', 'paused', 'error', 'idle'].includes(key)) return key;
       return 'unknown';
     };
 
@@ -517,7 +523,7 @@
       const totalRounds = Number(snapshot?.totalRounds || 1);
       const roundLabel = totalRounds > 1 ? ` \u2014 Round ${currentRound}/${totalRounds}` : '';
 
-      const status = { running: 0, done: 0, paused: 0, error: 0, idle: 0 };
+      const status = { running: 0, done: 0, dropped: 0, paused: 0, error: 0, idle: 0 };
       const states = {};
       let waiting = 0;
       let logsTotal = 0;
@@ -549,6 +555,7 @@
       statusRows.innerHTML = asList({
         Running: status.running,
         Done: status.done,
+        Dropped: status.dropped,
         Paused: status.paused,
         Error: status.error,
         Idle: Math.max(0, expected - observed) + status.idle,

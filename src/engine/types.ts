@@ -105,7 +105,7 @@ export interface BotConfig {
 
 // ── Bot Instance (runtime) ──────────────────────────────────
 
-export type BotStatus = 'idle' | 'running' | 'paused' | 'done' | 'error';
+export type BotStatus = 'idle' | 'running' | 'paused' | 'done' | 'dropped' | 'error';
 
 export interface LogEntry {
   timestamp: number;

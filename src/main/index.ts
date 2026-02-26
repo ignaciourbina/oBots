@@ -326,7 +326,7 @@ async function launchBots(config: AppConfig): Promise<void> {
           dropoutTimers.delete(bot.id);
           const currentBot = registry.getBot(bot.id);
           if (!currentBot) return;
-          if (currentBot.status === 'done' || currentBot.status === 'error') return;
+          if (currentBot.status === 'done' || currentBot.status === 'dropped' || currentBot.status === 'error') return;
 
           const delaySeconds = (delayMs / 1000).toFixed(1);
           log.warn(
@@ -338,6 +338,7 @@ async function launchBots(config: AppConfig): Promise<void> {
           botRunner.forceFinishBot(
             bot.id,
             `simulated dropout after ${delaySeconds}s (${dropoutRatePercent}% per run)`,
+            'dropped',
           );
         }, delayMs);
 
@@ -564,7 +565,9 @@ function buildOverviewSnapshot(): OverviewSnapshot {
       error: bot.error,
     }));
 
-  const finishedBots = bots.filter((b) => b.status === 'done' || b.status === 'error').length;
+  const finishedBots = bots.filter((b) =>
+    b.status === 'done' || b.status === 'dropped' || b.status === 'error'
+  ).length;
 
   return {
     timestamp: Date.now(),

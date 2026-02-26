@@ -141,6 +141,10 @@ html, body {
   border-color: #4caf50;
 }
 
+.bot-card--dropped {
+  border-color: #4da8ff;
+}
+
 .bot-card--error {
   border-color: #e94560;
 }
@@ -193,6 +197,7 @@ html, body {
 .bot-card__status-dot--running  { background: #00d4aa; animation: pulse 1.5s infinite; }
 .bot-card__status-dot--paused   { background: #ffc107; }
 .bot-card__status-dot--done     { background: #4caf50; }
+.bot-card__status-dot--dropped  { background: #4da8ff; }
 .bot-card__status-dot--error    { background: #e94560; }
 
 @keyframes pulse {

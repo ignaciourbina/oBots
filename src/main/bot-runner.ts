@@ -10,6 +10,7 @@ import puppeteer, { Browser, CDPSession } from 'puppeteer';
 import { BrowserWindow } from 'electron';
 import {
   BotInstance,
+  BotStatus,
   DEFAULTS,
   IpcChannel,
   LogEntry,
@@ -36,6 +37,9 @@ export class BotRunner {
   private readonly syslog = createChildLogger('bot-runner');
   private gridManager: GridManager | null = null;
   private allDoneCallback: (() => void) | null = null;
+  private isTerminalStatus(status: BotStatus): boolean {
+    return status === 'done' || status === 'dropped' || status === 'error';
+  }
 
   constructor(
     private readonly win: BrowserWindow,
@@ -161,7 +165,7 @@ export class BotRunner {
         this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, status);
 
         // Stop grid screencast when bot finishes
-        if (status === 'done' || status === 'error') {
+        if (this.isTerminalStatus(status)) {
           this.stopGridScreencast(botId);
         }
 
@@ -216,16 +220,17 @@ export class BotRunner {
 
   /**
    * Force-finish a bot that appears stalled.
-   * Marks it as done through the same status pipeline used by normal completion.
+   * Marks it as a terminal status through the same status pipeline
+   * used by normal completion.
    */
-  forceFinishBot(botId: string, reason: string): boolean {
+  forceFinishBot(botId: string, reason: string, finalStatus: 'done' | 'dropped' = 'done'): boolean {
     const bot = this.registry.getBot(botId);
     if (!bot) {
       this.syslog.warn('Cannot force-finish unknown bot %s', botId);
       return false;
     }
 
-    if (bot.status === 'done' || bot.status === 'error') {
+    if (this.isTerminalStatus(bot.status)) {
       return false;
     }
 
@@ -234,19 +239,19 @@ export class BotRunner {
 
     const runner = this.runners.get(botId);
     if (runner) {
-      runner.stop();
+      runner.stop(finalStatus);
       return true;
     }
 
     // Fallback path if runner is missing but registry still says non-terminal.
-    this.registry.updateStatus(botId, 'done');
+    this.registry.updateStatus(botId, finalStatus);
     this.safeSend(IpcChannel.BOT_STATUS, {
       id: botId,
       index: bot.index,
-      status: 'done',
+      status: finalStatus,
     });
-    this.gridManager?.sendBotStatus(botId, 'done');
-    this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, 'done');
+    this.gridManager?.sendBotStatus(botId, finalStatus);
+    this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, finalStatus);
     this.stopGridScreencast(botId);
 
     if (this.registry.allFinished()) {

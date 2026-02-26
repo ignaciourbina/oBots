@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('focusApi', {
     ipcRenderer.on('focus:bot-log', (_event, entry) => cb(entry));
   },
 
-  // Status change (running/paused/done/error)
+  // Status change (running/paused/done/dropped/error)
   onBotStatus: (cb: (status: string) => void) => {
     ipcRenderer.on('focus:bot-status', (_event, status: string) => cb(status));
   },

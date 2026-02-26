@@ -125,11 +125,11 @@ export class SessionRegistry {
   }
 
   /**
-   * Check if all bots have finished (done or error).
+   * Check if all bots have finished (done, dropped, or error).
    */
   allFinished(): boolean {
     for (const bot of this.bots.values()) {
-      if (bot.status !== 'done' && bot.status !== 'error') {
+      if (bot.status !== 'done' && bot.status !== 'dropped' && bot.status !== 'error') {
         return false;
       }
     }
