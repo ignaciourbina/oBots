@@ -26,6 +26,9 @@ app.commandLine.appendSwitch('no-sandbox');
 // Fallback: some GPU drivers cause crashes in the GPU process;
 // using the software rasterizer avoids that.
 app.commandLine.appendSwitch('disable-gpu-sandbox');
+// Some Linux environments have /dev/shm unavailable or misconfigured,
+// which causes Chromium to crash at startup.
+app.commandLine.appendSwitch('disable-dev-shm-usage');
 
 // ── Globals ─────────────────────────────────────────────────
 
