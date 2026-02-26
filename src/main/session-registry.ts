@@ -34,6 +34,7 @@ export class SessionRegistry {
       index,
       script,
       currentState: script.initialState,
+      lastStateChangeAt: Date.now(),
       status: 'idle',
       browser: null,
       page: null,
@@ -82,7 +83,24 @@ export class SessionRegistry {
     const bot = this.bots.get(id);
     if (bot) {
       bot.currentState = state;
+      bot.lastStateChangeAt = Date.now();
     }
+  }
+
+  /**
+   * Return running bots whose state has not changed within maxIdleMs.
+   */
+  getStaleRunningBots(maxIdleMs: number, nowMs: number = Date.now()): BotInstance[] {
+    const stale: BotInstance[] = [];
+    for (const bot of this.bots.values()) {
+      if (bot.status !== 'running') {
+        continue;
+      }
+      if ((nowMs - bot.lastStateChangeAt) >= maxIdleMs) {
+        stale.push(bot);
+      }
+    }
+    return stale;
   }
 
   /**

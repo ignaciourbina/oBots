@@ -215,6 +215,49 @@ export class BotRunner {
   }
 
   /**
+   * Force-finish a bot that appears stalled.
+   * Marks it as done through the same status pipeline used by normal completion.
+   */
+  forceFinishBot(botId: string, reason: string): boolean {
+    const bot = this.registry.getBot(botId);
+    if (!bot) {
+      this.syslog.warn('Cannot force-finish unknown bot %s', botId);
+      return false;
+    }
+
+    if (bot.status === 'done' || bot.status === 'error') {
+      return false;
+    }
+
+    this.syslog.warn('Force-finishing bot %s: %s', botId, reason);
+    this.log(botId, 'warn', `Force-finished: ${reason}`);
+
+    const runner = this.runners.get(botId);
+    if (runner) {
+      runner.stop();
+      return true;
+    }
+
+    // Fallback path if runner is missing but registry still says non-terminal.
+    this.registry.updateStatus(botId, 'done');
+    this.safeSend(IpcChannel.BOT_STATUS, {
+      id: botId,
+      index: bot.index,
+      status: 'done',
+    });
+    this.gridManager?.sendBotStatus(botId, 'done');
+    this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, 'done');
+    this.stopGridScreencast(botId);
+
+    if (this.registry.allFinished()) {
+      this.safeSend(IpcChannel.ALL_DONE);
+      this.allDoneCallback?.();
+    }
+
+    return true;
+  }
+
+  /**
    * Open a floating focus window for a specific bot.
    * Uses CDP Page.startScreencast for real-time live frames.
    * If one is already open, focus it instead of creating a duplicate.

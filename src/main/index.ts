@@ -6,7 +6,7 @@
 
 import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { AppConfig, BotScript, DEFAULT_STRATEGY, BotStrategy, IpcChannel, UrlInjectionConfig } from '../engine/types';
+import { AppConfig, BotScript, DEFAULT_STRATEGY, DEFAULTS, BotStrategy, IpcChannel, UrlInjectionConfig } from '../engine/types';
 import { parseCLI } from './cli';
 import { GridManager } from './grid-manager';
 import { SessionRegistry } from './session-registry';
@@ -48,6 +48,7 @@ let repeatCurrentRound = 0;
 let repeatTotalRounds = 1;
 let lastRunConfig: AppConfig | null = null;
 let isRepeating = false;
+let staleBotTimer: ReturnType<typeof setInterval> | null = null;
 
 interface OverviewSnapshot {
   timestamp: number;
@@ -405,6 +406,45 @@ async function handleRestartRequest(): Promise<void> {
   }
 }
 
+function checkForStaleBots(): void {
+  if (!runStarted || runStarting || currentPlayerCount <= 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const staleBots = registry.getStaleRunningBots(DEFAULTS.botStateStaleTimeoutMs, now);
+  for (const bot of staleBots) {
+    const staleForMs = now - bot.lastStateChangeAt;
+    const staleForSec = Math.round(staleForMs / 1000);
+    log.warn(
+      'Bot #%d (%s) stale in state "%s" for %ds; force-finishing',
+      bot.index,
+      bot.id,
+      bot.currentState,
+      staleForSec,
+    );
+    botRunner.forceFinishBot(
+      bot.id,
+      `no state change for ${staleForSec}s (timeout ${Math.round(DEFAULTS.botStateStaleTimeoutMs / 1000)}s)`,
+    );
+  }
+}
+
+function startStaleBotWatcher(): void {
+  if (staleBotTimer) {
+    return;
+  }
+  staleBotTimer = setInterval(checkForStaleBots, DEFAULTS.botStateStaleCheckIntervalMs);
+}
+
+function stopStaleBotWatcher(): void {
+  if (!staleBotTimer) {
+    return;
+  }
+  clearInterval(staleBotTimer);
+  staleBotTimer = null;
+}
+
 function scheduleGridRefresh(reason: string): void {
   if (layoutRefreshTimer) {
     clearTimeout(layoutRefreshTimer);
@@ -520,6 +560,7 @@ app.whenReady().then(async () => {
     registry = new SessionRegistry();
     botRunner = new BotRunner(mainWindow, registry, baseConfig.delayMultiplier);
     botRunner.setGridManager(gridManager);
+    startStaleBotWatcher();
 
     // Wire repeat-round logic: when all bots finish, start next round if needed.
     // Guard with isRepeating to prevent re-entrant calls: stopAll() triggers
@@ -603,6 +644,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  stopStaleBotWatcher();
   removeIpcHandlers();
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
   ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
@@ -615,6 +657,7 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('before-quit', async () => {
+  stopStaleBotWatcher();
   stopOverviewTicker();
   if (overviewWindow && !overviewWindow.isDestroyed()) {
     overviewWindow.close();

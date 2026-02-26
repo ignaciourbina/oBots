@@ -119,6 +119,7 @@ export interface BotInstance {
   index: number;
   script: BotScript;
   currentState: string;
+  lastStateChangeAt: number;
   status: BotStatus;
   browser: Browser | null;
   page: Page | null;
@@ -340,6 +341,8 @@ export const DEFAULTS = {
   actionDelayMultiplier: 1.0,
   pollIntervalMs: 250,
   maxPollTimeMs: 120_000,
+  botStateStaleTimeoutMs: 60_000,
+  botStateStaleCheckIntervalMs: 5_000,
   // Base minimum interval for screenshot attempts.
   screenshotIntervalMs: 16,
   // Global FPS budget for all bots combined.
