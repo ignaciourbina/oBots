@@ -30,11 +30,11 @@ help:
 
 # Run bots against the session URL from .env
 run: build
-	npx electron dist/main/index.js -- --url $(OTREE_SESSION_URL) -n $(OTREE_PLAYERS)
+	npx electron dist/main/index.js --no-sandbox -- --url $(OTREE_SESSION_URL) -n $(OTREE_PLAYERS)
 
 # Run with verbose logging
 dev: build
-	npx electron dist/main/index.js -- --url $(OTREE_SESSION_URL) -n $(OTREE_PLAYERS) --verbose
+	npx electron dist/main/index.js --no-sandbox -- --url $(OTREE_SESSION_URL) -n $(OTREE_PLAYERS) --verbose
 
 # Start oTree devserver with venv PATH correctly set
 otree:
@@ -92,7 +92,7 @@ up: build
 	echo "[up] run_id=$$RUN_LABEL port=$$PORT"; \
 	echo "[up] otree_log=$$LOG_FILE"; \
 	echo "[up] url=$$RUN_URL"; \
-	npx electron dist/main/index.js -- --url "$$RUN_URL" -n "$(OTREE_PLAYERS)"
+	npx electron dist/main/index.js --no-sandbox -- --url "$$RUN_URL" -n "$(OTREE_PLAYERS)"
 
 # Build TypeScript + copy renderer assets
 build:

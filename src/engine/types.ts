@@ -353,8 +353,10 @@ export const DEFAULTS = {
   botStateStaleTimeoutMs: 60_000,
   botStateStaleCheckIntervalMs: 5_000,
   // Dropout simulation window for bots selected by dropoutRatePercent.
-  dropoutMinDelayMs: 1_500,
-  dropoutMaxDelayMs: 10_000,
+  // Actual bounds are computed dynamically from action-delay settings and
+  // the runtime budget — these are only the absolute floor / ceiling.
+  dropoutMinDelayMs: 5_000,
+  dropoutMaxDelayMs: 240_000,
   // Base minimum interval for screenshot attempts.
   screenshotIntervalMs: 16,
   // Global FPS budget for all bots combined.

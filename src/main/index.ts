@@ -318,8 +318,26 @@ async function launchBots(config: AppConfig): Promise<void> {
       await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0);
 
       if (dropoutBotIds.has(bot.id)) {
+        // Compute a dropout window that scales with bot speed settings so
+        // dropouts are spread realistically across the run instead of all
+        // firing in the first few seconds.
+        //
+        // effectiveRuntimeMs estimates how long a slow run might take based
+        // on the per-action delay and the global delay multiplier.  We use
+        // 80 % of the runtime budget as the upper bound so the dropout
+        // always fires before the watchdog kills the bot.
+        const actionDelay = config.strategy.actionDelayMs ?? 0;
+        const multiplier = config.delayMultiplier ?? 1.0;
+        const estimatedRunMs = Math.max(
+          30_000,                                          // at least 30 s
+          DEFAULTS.botMaxRuntimeMs * 0.8,                  // 80 % of budget
+          actionDelay * multiplier * 200,                  // ~200 actions worth
+        );
         const minDelay = DEFAULTS.dropoutMinDelayMs;
-        const maxDelay = Math.max(minDelay, DEFAULTS.dropoutMaxDelayMs);
+        const maxDelay = Math.min(
+          Math.max(minDelay, estimatedRunMs),
+          DEFAULTS.dropoutMaxDelayMs,
+        );
         const delayMs = minDelay + Math.floor(Math.random() * (maxDelay - minDelay + 1));
 
         const timer = setTimeout(() => {
