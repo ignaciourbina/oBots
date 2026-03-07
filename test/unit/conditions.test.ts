@@ -57,4 +57,51 @@ describe('evaluateGuard', () => {
     await expect(evaluateGuard(page, { type: 'urlContains' })).rejects.toThrow('requires a value');
     await expect(evaluateGuard(page, { type: 'custom' })).rejects.toThrow('requires an fn string');
   });
+
+  // ── Edge cases ──────────────────────────────────────────
+
+  it('elementExists returns false when page.$ throws', async () => {
+    const page = makePage({
+      $: vi.fn(async () => { throw new Error('Execution context was destroyed'); }),
+    });
+    await expect(evaluateGuard(page, { type: 'elementExists', selector: '.x' })).resolves.toBe(false);
+  });
+
+  it('elementNotExists returns true when page.$ throws', async () => {
+    const page = makePage({
+      $: vi.fn(async () => { throw new Error('Execution context was destroyed'); }),
+    });
+    await expect(evaluateGuard(page, { type: 'elementNotExists', selector: '.x' })).resolves.toBe(true);
+  });
+
+  it('urlContains matches substrings', async () => {
+    const page = makePage({
+      url: vi.fn(() => 'http://localhost:8000/p/abc123/Results/1'),
+    });
+    await expect(evaluateGuard(page, { type: 'urlContains', value: 'abc123' })).resolves.toBe(true);
+    await expect(evaluateGuard(page, { type: 'urlContains', value: 'xyz' })).resolves.toBe(false);
+  });
+
+  it('textContains returns false when element is missing', async () => {
+    const page = makePage({
+      $eval: vi.fn(async () => { throw new Error('No element found for selector'); }),
+    });
+    await expect(
+      evaluateGuard(page, { type: 'textContains', selector: '.missing', value: 'foo' }),
+    ).resolves.toBe(false);
+  });
+
+  it('custom guard coerces truthy non-boolean to true', async () => {
+    const page = makePage({
+      evaluate: vi.fn(async () => 1),
+    });
+    await expect(evaluateGuard(page, { type: 'custom', fn: '(() => 1)()' })).resolves.toBe(true);
+  });
+
+  it('custom guard coerces falsy non-boolean to false', async () => {
+    const page = makePage({
+      evaluate: vi.fn(async () => 0),
+    });
+    await expect(evaluateGuard(page, { type: 'custom', fn: '(() => 0)()' })).resolves.toBe(false);
+  });
 });
