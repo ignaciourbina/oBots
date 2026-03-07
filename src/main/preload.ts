@@ -13,6 +13,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 // Inline IPC channel strings (must match IpcChannel enum in types.ts)
 const CH = {
+  EVT_START_FAILED: 'run:start-failed',
   GRID_LAYOUT:      'grid:layout',
   BOT_STATUS:       'bot:status',
   BOT_STATE_CHANGE: 'bot:state-change',
@@ -25,8 +26,12 @@ const CH = {
 console.log('[preload] Preload script executing…');
 
 try {
-  contextBridge.exposeInMainWorld('otreeBots', {
+  contextBridge.exposeInMainWorld('oBots', {
     // ── Main → Renderer listeners ────────────────────────
+    onStartFailed: (cb: (data: { message: string }) => void) => {
+      ipcRenderer.on(CH.EVT_START_FAILED, (_event, data) => cb(data));
+    },
+
     onGridLayout: (cb: (layout: unknown) => void) => {
       console.log('[preload] Registering onGridLayout listener');
       ipcRenderer.on(CH.GRID_LAYOUT, (_event, layout) => {

@@ -2,7 +2,7 @@
 // src/main/launcher.ts
 // ──────────────────────────────────────────────────────────────
 // CLI entry point — spawns Electron with the main process.
-// This is the `otree-bots` bin command.
+// This is the `obots` bin command.
 // ──────────────────────────────────────────────────────────────
 
 import { spawn } from 'child_process';

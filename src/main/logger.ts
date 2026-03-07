@@ -67,7 +67,7 @@ const consoleTransport = new winston.transports.Console({
 
 const fileTransport = new DailyRotateFile({
   dirname: getLogDir(),
-  filename: 'otree-bots-%DATE%.log',
+  filename: 'obots-%DATE%.log',
   datePattern: 'YYYY-MM-DD',
   maxSize: '20m',
   maxFiles: '14d',
@@ -77,7 +77,7 @@ const fileTransport = new DailyRotateFile({
 
 const errorFileTransport = new DailyRotateFile({
   dirname: getLogDir(),
-  filename: 'otree-bots-error-%DATE%.log',
+  filename: 'obots-error-%DATE%.log',
   datePattern: 'YYYY-MM-DD',
   maxSize: '10m',
   maxFiles: '30d',

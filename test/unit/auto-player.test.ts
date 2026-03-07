@@ -58,4 +58,20 @@ describe('createAutoPlayer terminal detection', () => {
     );
     expect(hasStaleRecoveryMarker).toBe(true);
   });
+
+  it('uses safe sessionStorage access in wait-page maintenance snippets', () => {
+    const script = createAutoPlayer();
+
+    const clearMarkersAction = script.states.waitForPage.onEntry.find((a) =>
+      a.type === 'evaluate' && typeof a.value === 'string' && a.value.includes('__otb_wait_ready_since'),
+    );
+    expect(clearMarkersAction?.value).toContain('return window.sessionStorage');
+    expect(clearMarkersAction?.value).toContain('catch');
+    expect(clearMarkersAction?.value).toContain('removeValue(');
+
+    const stuckReadyTransition = script.states.handleWaitPage.transitions.find((t) =>
+      t.target === 'recoverWaitPage' && t.guard?.type === 'custom',
+    );
+    expect(stuckReadyTransition?.guard?.fn).toContain('if (!storage) return false;');
+  });
 });

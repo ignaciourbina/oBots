@@ -1,10 +1,10 @@
 {
-  "name": "otree-bots",
+  "name": "obots",
   "version": "0.2.0",
-  "description": "Live browser-based bot testing for oTree experiments",
+  "description": "Open Bot Online Testing Suite — live browser-based bot testing for behavioral experiments",
   "main": "dist/main/index.js",
   "bin": {
-    "otree-bots": "./dist/main/launcher.js"
+    "obots": "./dist/main/launcher.js"
   },
   "scripts": {
     "build": "mkdir -p dist/renderer && tsc && cp -v src/renderer/index.html src/renderer/styles.css src/renderer/focus.html src/renderer/bot-view.html src/renderer/overview.html dist/renderer/",
@@ -22,7 +22,7 @@
     "package": "electron-builder"
   },
   "keywords": [
-    "otree",
+    "obots",
     "bots",
     "testing",
     "automation",

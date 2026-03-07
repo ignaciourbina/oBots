@@ -46,7 +46,12 @@ describe('ipc-handlers', () => {
     const onStart = vi.fn(async () => undefined);
     const onRestart = vi.fn(async () => undefined);
 
-    registerIpcHandlers(runner, onStart, onRestart);
+    const mainWindow = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn() },
+    } as any;
+
+    registerIpcHandlers(runner, onStart, onRestart, mainWindow);
 
     expect(ipcMainMock.on).toHaveBeenCalledTimes(7);
 

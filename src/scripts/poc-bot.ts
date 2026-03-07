@@ -2,7 +2,7 @@
 // ──────────────────────────────────────────────────────────────
 // Proof-of-Concept bot script.
 //
-// This is a generic oTree auto-player that:
+// This is a generic auto-player that:
 //   1. Navigates to the join link (handled by BotRunner)
 //   2. Waits for the page to load
 //   3. Fills form fields with sensible defaults
@@ -10,7 +10,7 @@
 //   5. If a "queue for next round" button appears, clicks it immediately
 //   6. Loops until the game ends (OutOfRangeNotification)
 //
-// This script works with most standard oTree apps without
+// This script works with most standard experiment apps without
 // any game-specific customization.
 // ──────────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ const POC_BOT: BotScript = {
     },
 
     // ── State: waitForPage ────────────────────────────────
-    // Waits for an oTree page to be fully loaded, then decides
+    // Waits for a page to be fully loaded, then decides
     // whether to fill a form or just click next.
     waitForPage: {
       onEntry: [
@@ -56,13 +56,13 @@ const POC_BOT: BotScript = {
           target: 'done',
           guard: { type: 'urlContains', value: 'OutOfRangeNotification' },
         },
-        // Detect oTree WaitPage (auto-refreshing page with no form)
+        // Detect WaitPage (auto-refreshing page with no form)
         {
           target: 'handleWaitPage',
           guard: {
             type: 'custom',
             fn: `(() => {
-              // oTree WaitPages: have the otree-wait-page class, or
+              // WaitPages: have the .otree-wait-page class, or
               // script containing 'waitForRedirect' / 'is_wait_page', or
               // the page body has no form and no submit button
               const isWaitPage = !!(
@@ -133,11 +133,11 @@ const POC_BOT: BotScript = {
     },
 
     // ── State: handleWaitPage ─────────────────────────────
-    // oTree WaitPages auto-advance via AJAX when all group
+    // WaitPages auto-advance via AJAX when all group
     // members arrive. Just wait and reload until we leave.
     handleWaitPage: {
       onEntry: [
-        { type: 'log', value: 'Detected oTree WaitPage — waiting for other players…' },
+        { type: 'log', value: 'Detected WaitPage — waiting for other players…' },
         { type: 'wait', value: 1500 },
         {
           type: 'evaluate',

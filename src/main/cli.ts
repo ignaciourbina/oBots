@@ -23,14 +23,14 @@ export function parseCLI(argv?: string[]): AppConfig {
     : hideBin(raw);                // normal invocation
 
   const args = yargs(effectiveArgv)
-    .scriptName('otree-bots')
+    .scriptName('obots')
     .usage('$0 [run] [options]')
-    .command('run', 'Launch bot players against an oTree session')
+    .command('run', 'Launch bot players against a behavioral experiment session')
     .command('$0', '(default) Launch bot players', () => {}, () => {})
     .option('url', {
       alias: 'u',
       type: 'string',
-      description: 'oTree session-wide link or room URL',
+      description: 'Session-wide link or room URL',
       demandOption: false,
       default: '',
     })

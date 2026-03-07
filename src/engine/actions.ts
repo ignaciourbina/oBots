@@ -143,7 +143,7 @@ export async function executeAction(
     }
 
     // ── clickNamedFormButton ──────────────────────────────
-    // Handles oTree decision pages that use <button name="field" value="x">
+    // Handles experiment decision pages that use <button name="field" value="x">
     // instead of <input type="radio">. Randomly selects a button per group
     // according to the radioStrategy, then clicks it (which also submits the form).
     case 'clickNamedFormButton': {
@@ -391,14 +391,14 @@ const CSS = globalThis.CSS ?? {
 // ── Named form button clicking ─────────────────────────────
 
 /**
- * Handle oTree decision pages that use <button name="field" value="x"> elements
+ * Handle experiment decision pages that use <button name="field" value="x"> elements
  * (e.g. prisoner's dilemma Choice A / Choice B) instead of radio inputs.
  * Groups buttons by their `name` attribute and applies the radioStrategy to
  * randomly select one per group, then clicks it (which also submits the form).
  */
 async function clickNamedFormButtonVisible(page: Page, strategy: BotStrategy): Promise<void> {
   // Discover named-button groups via a single evaluate call.
-  // Exclude .otree-btn-next and buttons that are pure navigation (no name).
+  // Exclude .otree-btn-next (experiment nav button) and buttons with no name.
   const groups = await page.evaluate(() => {
     const result: Record<string, string[]> = {};
     document.querySelectorAll<HTMLButtonElement>('button[name]:not(.otree-btn-next)').forEach((btn) => {
@@ -431,7 +431,7 @@ async function clickNamedFormButtonVisible(page: Page, strategy: BotStrategy): P
       page.click(selector),
     ]);
 
-    // Process one group only: oTree decision pages have a single named-button
+    // Process one group only: experiment decision pages have a single named-button
     // group that both sets the field value AND submits the form.
     break;
   }

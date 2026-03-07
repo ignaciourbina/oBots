@@ -1,9 +1,9 @@
 // src/scripts/auto-player.ts
 // ──────────────────────────────────────────────────────────────
-// Game-agnostic oTree auto-player — factory that generates a
+// Game-agnostic auto-player — factory that generates a
 // BotScript from a BotStrategy configuration.
 //
-// The generated script works with ANY standard oTree game:
+// The generated script works with ANY standard behavioral experiment:
 //   1. Detects page type (WaitPage, form page, results page)
 //   2. Fills form fields using the chosen strategy
 //   3. Clicks submit / next
@@ -48,7 +48,56 @@ const EXIT_WAIT_PAGE_GUARD = `(() => {
   return !isWaitPage;
 })()`;
 
+const WAIT_PAGE_STORAGE_HELPERS = `
+  const storage = (() => {
+    try {
+      return window.sessionStorage;
+    } catch {
+      return null;
+    }
+  })();
+  const readJson = (key, fallback) => {
+    if (!storage) return fallback;
+    try {
+      const raw = storage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const readNumber = (key, fallback = 0) => {
+    if (!storage) return fallback;
+    try {
+      const raw = storage.getItem(key);
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const writeValue = (key, value) => {
+    if (!storage) return false;
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const removeValue = (key) => {
+    if (!storage) return false;
+    try {
+      storage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+`;
+
 const WAIT_PAGE_STUCK_READY_GUARD = `(() => {
+  ${WAIT_PAGE_STORAGE_HELPERS}
+  if (!storage) return false;
   const urlKey = window.location.pathname + window.location.search;
   const recoveredKey = '__otb_wait_recovered_urls';
   const text = (document.body?.innerText || '').toLowerCase();
@@ -56,34 +105,29 @@ const WAIT_PAGE_STUCK_READY_GUARD = `(() => {
   const key = '__otb_wait_ready_since:' + urlKey;
   const now = Date.now();
 
-  let recovered = {};
-  try {
-    recovered = JSON.parse(sessionStorage.getItem(recoveredKey) || '{}');
-  } catch {
-    recovered = {};
-  }
+  const recovered = readJson(recoveredKey, {});
 
   // Cooldown: at most one forced recovery per wait-page URL.
   if (recovered[urlKey]) {
-    sessionStorage.removeItem(key);
+    removeValue(key);
     return false;
   }
 
   if (!match) {
-    sessionStorage.removeItem(key);
+    removeValue(key);
     return false;
   }
 
   const ready = Number(match[1]);
   const total = Number(match[2]);
   if (!Number.isFinite(ready) || !Number.isFinite(total) || total <= 0 || ready < total) {
-    sessionStorage.removeItem(key);
+    removeValue(key);
     return false;
   }
 
-  const since = Number(sessionStorage.getItem(key) || 0);
+  const since = readNumber(key, 0);
   if (!since) {
-    sessionStorage.setItem(key, String(now));
+    writeValue(key, String(now));
     return false;
   }
 
@@ -91,9 +135,10 @@ const WAIT_PAGE_STUCK_READY_GUARD = `(() => {
 })()`;
 
 const CLEAR_WAIT_PAGE_MARKERS = `(() => {
+  ${WAIT_PAGE_STORAGE_HELPERS}
   const urlKey = window.location.pathname + window.location.search;
-  sessionStorage.removeItem('__otb_wait_ready_since:' + urlKey);
-  sessionStorage.removeItem('__otb_wait_progress_state:' + urlKey);
+  removeValue('__otb_wait_ready_since:' + urlKey);
+  removeValue('__otb_wait_progress_state:' + urlKey);
   const w = window;
   if (w.__otbWaitNudgeTimer) {
     clearInterval(w.__otbWaitNudgeTimer);
@@ -102,20 +147,19 @@ const CLEAR_WAIT_PAGE_MARKERS = `(() => {
 })()`;
 
 const MARK_WAIT_PAGE_RECOVERY = `(() => {
+  ${WAIT_PAGE_STORAGE_HELPERS}
+  if (!storage) return;
   const urlKey = window.location.pathname + window.location.search;
   const recoveredKey = '__otb_wait_recovered_urls';
-  let recovered = {};
-  try {
-    recovered = JSON.parse(sessionStorage.getItem(recoveredKey) || '{}');
-  } catch {
-    recovered = {};
-  }
+  const recovered = readJson(recoveredKey, {});
   recovered[urlKey] = Date.now();
-  sessionStorage.setItem(recoveredKey, JSON.stringify(recovered));
-  sessionStorage.removeItem('__otb_wait_ready_since:' + urlKey);
+  writeValue(recoveredKey, JSON.stringify(recovered));
+  removeValue('__otb_wait_ready_since:' + urlKey);
 })()`;
 
 const WAIT_PAGE_STALE_PROGRESS_GUARD = `(() => {
+  ${WAIT_PAGE_STORAGE_HELPERS}
+  if (!storage) return false;
   const urlKey = window.location.pathname + window.location.search;
   const stateKey = '__otb_wait_progress_state:' + urlKey;
   const text = (document.body?.innerText || '').toLowerCase();
@@ -123,27 +167,22 @@ const WAIT_PAGE_STALE_PROGRESS_GUARD = `(() => {
   const now = Date.now();
 
   if (!match) {
-    sessionStorage.removeItem(stateKey);
+    removeValue(stateKey);
     return false;
   }
 
   const ready = Number(match[1]);
   const total = Number(match[2]);
   if (!Number.isFinite(ready) || !Number.isFinite(total) || total <= 0) {
-    sessionStorage.removeItem(stateKey);
+    removeValue(stateKey);
     return false;
   }
 
   const ratio = ready + '/' + total;
-  let state = null;
-  try {
-    state = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
-  } catch {
-    state = null;
-  }
+  const state = readJson(stateKey, null);
 
   if (!state || state.ratio !== ratio) {
-    sessionStorage.setItem(stateKey, JSON.stringify({
+    writeValue(stateKey, JSON.stringify({
       ratio,
       since: now,
       lastReload: state?.lastReload || 0,
@@ -166,6 +205,8 @@ const WAIT_PAGE_STALE_PROGRESS_GUARD = `(() => {
 })()`;
 
 const MARK_WAIT_PAGE_STALE_RECOVERY = `(() => {
+  ${WAIT_PAGE_STORAGE_HELPERS}
+  if (!storage) return;
   const urlKey = window.location.pathname + window.location.search;
   const stateKey = '__otb_wait_progress_state:' + urlKey;
   const text = (document.body?.innerText || '').toLowerCase();
@@ -173,14 +214,9 @@ const MARK_WAIT_PAGE_STALE_RECOVERY = `(() => {
   const now = Date.now();
 
   const ratio = match ? (Number(match[1]) + '/' + Number(match[2])) : 'unknown';
-  let state = null;
-  try {
-    state = JSON.parse(sessionStorage.getItem(stateKey) || 'null');
-  } catch {
-    state = null;
-  }
+  const state = readJson(stateKey, null);
 
-  sessionStorage.setItem(stateKey, JSON.stringify({
+  writeValue(stateKey, JSON.stringify({
     ratio: state?.ratio || ratio,
     since: now,
     lastReload: now,
@@ -201,7 +237,7 @@ const WAIT_PAGE_NUDGE_ACTION = `(() => {
     }
   };
 
-  // oTree wait pages often rely on JS polling loops; call known hooks directly.
+  // Wait pages often rely on JS polling loops; call known hooks directly.
   const tick = () => {
     call('waitForRedirect');
     call('wait_for_redirect');
@@ -244,7 +280,7 @@ const HAS_FORM_FIELDS_GUARD = `(() => {
 })()`;
 
 // ── Named-button form detection guard ───────────────────────
-// Detects oTree decision pages that use <button name="field" value="x">
+// Detects decision pages that use <button name="field" value="x">
 // (e.g. "I choose Choice A / Choice B") instead of <input type="radio">.
 // These buttons set the field value AND submit the form when clicked.
 
@@ -331,7 +367,7 @@ const TERMINAL_PAGE_GUARD = `(() => {
 
 /**
  * Create a game-agnostic BotScript configured with the given strategy.
- * Works with any standard oTree experiment.
+ * Works with any standard behavioral experiment.
  */
 export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotScript {
   const submitDelayAction = strategy.submitDelay > 0
@@ -385,7 +421,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'queueNextRound',
             guard: { type: 'custom', fn: QUEUE_NEXT_ROUND_GUARD },
           },
-          // oTree named-button decision pages (e.g. <button name="cooperate" value="True">)
+          // named-button decision pages (e.g. <button name="cooperate" value="True">)
           // Must be checked before fillAndSubmit — named buttons act as both
           // the field input and the form submit, so no separate submit click is needed.
           {
@@ -411,12 +447,12 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       },
 
       // ── handleWaitPage ──────────────────────────────────
-      // Do NOT reload — oTree WaitPages use built-in JS polling
+      // Do NOT reload — WaitPages use built-in JS polling
       // (waitForRedirect) that auto-redirects when the group is ready.
       // Reloading destroys that JS context and causes missed redirects.
       handleWaitPage: {
         onEntry: [
-          { type: 'log', value: 'Detected oTree WaitPage — waiting for other players…' },
+          { type: 'log', value: 'Detected WaitPage — waiting for other players…' },
           { type: 'evaluate', value: WAIT_PAGE_NUDGE_ACTION },
           { type: 'wait', value: 3000 },
         ],
@@ -429,7 +465,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'done',
             guard: { type: 'custom', fn: TERMINAL_PAGE_GUARD },
           },
-          // oTree JS auto-redirected us — no longer on a WaitPage
+          // experiment JS auto-redirected us — no longer on a WaitPage
           {
             target: 'waitForPage',
             guard: {
@@ -438,7 +474,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             },
           },
           // Full group is ready but the wait page didn't auto-redirect.
-          // Do a controlled refresh to rebind oTree's wait-page polling.
+          // Do a controlled refresh to rebind the experiment's wait-page polling.
           {
             target: 'recoverWaitPage',
             guard: {
@@ -521,7 +557,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       },
 
       // ── clickNamedButton ────────────────────────────────
-      // Handles oTree pages where the decision is expressed as
+      // Handles pages where the decision is expressed as
       //   <button name="field" value="x">Label</button>
       // Clicking one of these buttons both sets the field value and
       // submits the form, so no separate "clickNext" step is needed.
