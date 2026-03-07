@@ -77,7 +77,7 @@ async function createWindow(config: AppConfig): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: 'oTree Bots',
+    title: 'oBots — Open Bot Online Testing Suite',
     webPreferences: {
       sandbox: false,           // allow require() in preload
       webviewTag: true,
@@ -315,7 +315,7 @@ async function launchBots(config: AppConfig): Promise<void> {
       const navigationUrl = buildBotNavigationUrl(config.url, bot.index, config.urlInjection, runContext);
       await botRunner.launchBrowser(bot);
       await botRunner.navigate(bot, navigationUrl);
-      await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0);
+      await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0, config.strategy);
 
       if (dropoutBotIds.has(bot.id)) {
         // Compute a dropout window that scales with bot speed settings so
@@ -404,6 +404,9 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           submitDelay: Number(start.strategy.submitDelay) || 0,
           actionDelayMs: Number(start.strategy.actionDelayMs) || 0,
           actionJitterMs: Number(start.strategy.actionJitterMs) || 0,
+          staleProbability: Number(start.strategy.staleProbability) || 0,
+          staleExtraDelayMs: Number(start.strategy.staleExtraDelayMs) || 0,
+          dropProbability: Number(start.strategy.dropProbability) || 0,
         }
       : baseConfig.strategy;
     const runConfig: AppConfig = {
@@ -462,7 +465,7 @@ async function handleRepeatRound(): Promise<void> {
   await botRunner.stopAll();
   currentPlayerCount = 0;
 
-  // Brief pause to let oTree server process the completed session
+  // Brief pause to let the experiment server process the completed session
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
   // Bail if a restart/stop occurred during the pause
@@ -716,7 +719,7 @@ app.whenReady().then(async () => {
       }
     });
 
-    registerIpcHandlers(botRunner, handleStartRequest, handleRestartRequest);
+    registerIpcHandlers(botRunner, handleStartRequest, handleRestartRequest, mainWindow);
 
     // Forward open-drawer requests from BrowserView → main renderer
     ipcMain.on(IpcChannel.CMD_OPEN_DRAWER, (_event, payload: { id: string; index: number }) => {

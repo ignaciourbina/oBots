@@ -11,6 +11,7 @@ import { BrowserWindow } from 'electron';
 import {
   BotInstance,
   BotStatus,
+  BotStrategy,
   DEFAULTS,
   IpcChannel,
   LogEntry,
@@ -29,6 +30,19 @@ interface GridScreencast {
   cdp: CDPSession;
   active: boolean;
 }
+
+const RETRIABLE_NAVIGATION_ERROR_TOKENS = [
+  'ERR_CONNECTION_REFUSED',
+  'ERR_CONNECTION_RESET',
+  'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_TIMED_OUT',
+  'ERR_TIMED_OUT',
+  'ERR_NAME_NOT_RESOLVED',
+  'ERR_NETWORK_CHANGED',
+  'ERR_INTERNET_DISCONNECTED',
+  'ERR_ADDRESS_UNREACHABLE',
+  'ERR_EMPTY_RESPONSE',
+];
 
 export class BotRunner {
   private runners: Map<string, StateMachineRunner> = new Map();
@@ -112,10 +126,41 @@ export class BotRunner {
 
     this.syslog.info('Bot %s navigating to %s', bot.id, url);
     this.log(bot.id, 'info', `Navigating to ${url}`);
-    await bot.page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: DEFAULTS.navigationTimeoutMs,
-    });
+
+    const maxAttempts = Math.max(1, DEFAULTS.retryCount + 1);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        await bot.page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: DEFAULTS.navigationTimeoutMs,
+        });
+        break;
+      } catch (err) {
+        const lastAttempt = attempt >= maxAttempts;
+        if (!this.isRetriableNavigationError(err) || lastAttempt) {
+          throw err;
+        }
+
+        const waitMs = DEFAULTS.retryBackoffMs * attempt;
+        const msg = err instanceof Error ? err.message : String(err);
+        this.syslog.warn(
+          'Bot %s navigation attempt %d/%d failed (%s) — retrying in %dms',
+          bot.id,
+          attempt,
+          maxAttempts,
+          msg,
+          waitMs,
+        );
+        this.log(
+          bot.id,
+          'warn',
+          `Navigation attempt ${attempt}/${maxAttempts} failed (${msg}). Retrying in ${waitMs}ms...`,
+        );
+        await this.sleep(waitMs);
+      }
+    }
+
+    await this.recoverFromSiteUnreachable(bot, url);
     this.syslog.info('Bot %s navigation complete: %s', bot.id, bot.page.url());
     this.log(bot.id, 'info', `Navigation complete: ${bot.page.url()}`);
   }
@@ -123,7 +168,7 @@ export class BotRunner {
   /**
    * Start the FSM for the given bot.
    */
-  async startFSM(bot: BotInstance, actionDelayMs: number = 0, actionJitterMs: number = 0): Promise<void> {
+  async startFSM(bot: BotInstance, actionDelayMs: number = 0, actionJitterMs: number = 0, strategy?: BotStrategy): Promise<void> {
     if (!bot.page) throw new Error(`Bot ${bot.id} has no page — launch browser first`);
 
     const callbacks: FSMCallbacks = {
@@ -189,6 +234,7 @@ export class BotRunner {
       this.delayMultiplier,
       actionDelayMs,
       actionJitterMs,
+      strategy,
     );
 
     this.runners.set(bot.id, runner);
@@ -493,6 +539,100 @@ export class BotRunner {
     const entry: LogEntry = { timestamp: Date.now(), level, message };
     this.registry.addLog(botId, entry);
     this.safeSend(IpcChannel.BOT_LOG, { id: botId, entry });
+  }
+
+  private isRetriableNavigationError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return RETRIABLE_NAVIGATION_ERROR_TOKENS.some((token) => msg.includes(token));
+  }
+
+  private async isChromeUnreachablePage(bot: BotInstance): Promise<boolean> {
+    if (!bot.page) {
+      return false;
+    }
+
+    const currentUrl = bot.page.url().toLowerCase();
+    if (currentUrl.startsWith('chrome-error://')) {
+      return true;
+    }
+
+    try {
+      const details = await bot.page.evaluate(() => ({
+        title: (document.title || '').toLowerCase(),
+        bodyText: (document.body?.innerText || '').toLowerCase(),
+      }));
+
+      const cantReachMarker = details.bodyText.includes('this site can\'t be reached')
+        || details.bodyText.includes('this site can\u2019t be reached');
+      const errorCodeMarker = /\berr_[a-z0-9_]+\b/i.test(details.title)
+        || /\berr_[a-z0-9_]+\b/i.test(details.bodyText);
+      return cantReachMarker || errorCodeMarker;
+    } catch {
+      return false;
+    }
+  }
+
+  private async recoverFromSiteUnreachable(bot: BotInstance, url: string): Promise<void> {
+    if (!bot.page) {
+      return;
+    }
+    if (!(await this.isChromeUnreachablePage(bot))) {
+      return;
+    }
+
+    const maxRefreshes = 10;
+    this.syslog.warn(
+      'Bot %s landed on Chromium "site can\'t be reached" page — starting refresh loop',
+      bot.id,
+    );
+    this.log(bot.id, 'warn', 'Site unreachable page detected. Starting refresh loop.');
+
+    for (let refresh = 1; refresh <= maxRefreshes; refresh += 1) {
+      const waitMs = DEFAULTS.retryBackoffMs * Math.min(refresh, 5);
+      await this.sleep(waitMs);
+
+      let recoveredByReload = false;
+      try {
+        await bot.page.reload({
+          waitUntil: 'domcontentloaded',
+          timeout: DEFAULTS.navigationTimeoutMs,
+        });
+        recoveredByReload = true;
+      } catch (err) {
+        if (!this.isRetriableNavigationError(err)) {
+          throw err;
+        }
+      }
+
+      if (!recoveredByReload) {
+        try {
+          await bot.page.goto(url, {
+            waitUntil: 'domcontentloaded',
+            timeout: DEFAULTS.navigationTimeoutMs,
+          });
+        } catch (err) {
+          if (!this.isRetriableNavigationError(err)) {
+            throw err;
+          }
+        }
+      }
+
+      if (!(await this.isChromeUnreachablePage(bot))) {
+        this.syslog.info(
+          'Bot %s recovered from unreachable page after %d refresh attempt(s)',
+          bot.id,
+          refresh,
+        );
+        this.log(bot.id, 'info', `Recovered from unreachable page after ${refresh} refresh attempt(s).`);
+        return;
+      }
+    }
+
+    throw new Error('Site remained unreachable after repeated refresh attempts.');
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 
 }

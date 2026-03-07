@@ -179,7 +179,7 @@ export class SessionRegistry {
    */
   async destroyAll(): Promise<void> {
     // Close sequentially with a tiny stagger to avoid connection-close storms
-    // against the oTree websocket server.
+    // against the experiment's websocket server.
     const bots = Array.from(this.bots.values());
     for (let i = 0; i < bots.length; i++) {
       await this.closeBotTransport(bots[i]);

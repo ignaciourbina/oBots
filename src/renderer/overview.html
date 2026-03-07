@@ -348,6 +348,18 @@
       border-color: rgba(255, 103, 118, 0.46);
     }
 
+    .pill--stale {
+      color: #ffcc80;
+      background: rgba(255, 152, 0, 0.18);
+      border-color: rgba(255, 152, 0, 0.45);
+    }
+
+    .pill--dropped {
+      color: #bdbdbd;
+      background: rgba(158, 158, 158, 0.18);
+      border-color: rgba(158, 158, 158, 0.45);
+    }
+
     .pill--idle,
     .pill--unknown {
       color: #c7d3f8;
@@ -398,7 +410,7 @@
 
     <div class="kpis">
       <div class="kpi"><div class="label">Expected Bots</div><div class="value" id="kpi-expected">0</div></div>
-      <div class="kpi"><div class="label">Observed Bots</div><div class="value" id="kpi-observed">0</div></div>
+      <div class="kpi"><div class="label">Errors</div><div class="value" id="kpi-errors">0</div></div>
       <div class="kpi"><div class="label">Finished</div><div class="value" id="kpi-finished">0</div></div>
       <div class="kpi"><div class="label">In Wait States</div><div class="value" id="kpi-waiting">0</div></div>
       <div class="kpi"><div class="label">Elapsed</div><div class="value mono" id="kpi-elapsed">00:00:00</div></div>
@@ -452,7 +464,7 @@
     const progressFill = document.getElementById('progress-fill');
 
     const kpiExpected = document.getElementById('kpi-expected');
-    const kpiObserved = document.getElementById('kpi-observed');
+    const kpiErrors = document.getElementById('kpi-errors');
     const kpiFinished = document.getElementById('kpi-finished');
     const kpiWaiting = document.getElementById('kpi-waiting');
     const kpiElapsed = document.getElementById('kpi-elapsed');
@@ -478,7 +490,7 @@
 
     const statusClass = (value) => {
       const key = String(value || 'unknown').toLowerCase();
-      if (['running', 'done', 'dropped', 'paused', 'error', 'idle'].includes(key)) return key;
+      if (['running', 'done', 'dropped', 'paused', 'error', 'idle', 'stale'].includes(key)) return key;
       return 'unknown';
     };
 
@@ -523,7 +535,7 @@
       const totalRounds = Number(snapshot?.totalRounds || 1);
       const roundLabel = totalRounds > 1 ? ` \u2014 Round ${currentRound}/${totalRounds}` : '';
 
-      const status = { running: 0, done: 0, dropped: 0, paused: 0, error: 0, idle: 0 };
+      const status = { running: 0, done: 0, dropped: 0, paused: 0, stale: 0, error: 0, idle: 0 };
       const states = {};
       let waiting = 0;
       let logsTotal = 0;
@@ -541,7 +553,7 @@
       const completion = Math.min(100, Math.round((finished / completionBase) * 100));
 
       kpiExpected.textContent = String(expected);
-      kpiObserved.textContent = String(observed);
+      kpiErrors.textContent = String(status.error);
       kpiFinished.textContent = String(finished);
       kpiWaiting.textContent = String(waiting);
       kpiElapsed.textContent = elapsed;
@@ -557,6 +569,7 @@
         Done: status.done,
         Dropped: status.dropped,
         Paused: status.paused,
+        Stale: status.stale,
         Error: status.error,
         Idle: Math.max(0, expected - observed) + status.idle,
       });

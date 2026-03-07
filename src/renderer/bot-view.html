@@ -51,6 +51,7 @@
     .bot-header__dot--done    { background: #4caf50; }
     .bot-header__dot--dropped { background: #4da8ff; }
     .bot-header__dot--error   { background: #e94560; }
+    .bot-header__dot--stale   { background: #ff9800; animation: pulse 2s infinite; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -83,7 +84,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: context-menu;
+      cursor: pointer;
     }
 
     #screenshot {
@@ -115,6 +116,9 @@
     .bot-body--error {
       border: 2px solid #e94560;
     }
+    .bot-body--stale {
+      border: 2px solid #ff9800;
+    }
   </style>
 </head>
 <body>
@@ -125,7 +129,7 @@
       <span class="bot-header__state" id="bot-state">idle</span>
     </div>
 
-    <div class="bot-body" id="bot-body">
+    <div class="bot-body" id="bot-body" title="Left-click: open logs &#10;Right-click: focus window">
       <img id="screenshot" decoding="async" alt="Bot screenshot" />
       <div id="placeholder">Waiting…</div>
     </div>
@@ -146,10 +150,11 @@
 
     function setStatus(status) {
       statusDot.className = 'bot-header__dot bot-header__dot--' + status;
-      botBody.classList.remove('bot-body--done', 'bot-body--dropped', 'bot-body--error');
+      botBody.classList.remove('bot-body--done', 'bot-body--dropped', 'bot-body--error', 'bot-body--stale');
       if (status === 'done') botBody.classList.add('bot-body--done');
       if (status === 'dropped') botBody.classList.add('bot-body--dropped');
       if (status === 'error') botBody.classList.add('bot-body--error');
+      if (status === 'stale') botBody.classList.add('bot-body--stale');
     }
 
     function setState(state) {

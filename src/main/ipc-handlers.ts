@@ -24,6 +24,9 @@ export interface StrategyPayload {
   submitDelay: number;
   actionDelayMs: number;
   actionJitterMs: number;
+  staleProbability: number;
+  staleExtraDelayMs: number;
+  dropProbability: number;
 }
 
 export interface StartPayload {
@@ -42,12 +45,17 @@ export function registerIpcHandlers(
   runner: BotRunner,
   onStart: (payload: StartPayload) => Promise<void>,
   onRestart: () => Promise<void>,
+  mainWindow: import('electron').BrowserWindow,
 ): void {
   // ── CMD_START ─────────────────────────────────────────
   ipcMain.on(IpcChannel.CMD_START, (_event, payload: StartPayload) => {
     log.info('cmd:start received');
     void onStart(payload).catch((err) => {
-      log.error('cmd:start failed: %s', err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      log.error('cmd:start failed: %s', message);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcChannel.EVT_START_FAILED, { message });
+      }
     });
   });
 

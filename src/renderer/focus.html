@@ -55,6 +55,7 @@
     .focus-bar__dot--done     { background: #2196f3; }
     .focus-bar__dot--dropped  { background: #4da8ff; }
     .focus-bar__dot--error    { background: #f44336; }
+    .focus-bar__dot--stale    { background: #ff9800; }
 
     .focus-bar__status {
       font-size: 12px;
@@ -119,6 +120,27 @@
       justify-content: center;
       color: #555;
       font-size: 16px;
+    }
+
+    .focus-done-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 15, 26, 0.45);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .focus-done-badge {
+      background: rgba(33, 150, 243, 0.85);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px 20px;
+      border-radius: 8px;
+      letter-spacing: 0.03em;
     }
 
     /* ── Log panel (collapsible) ─────────────────────── */
@@ -197,18 +219,6 @@
 
     .focus-log--error { background: rgba(244, 67, 54, 0.08); }
 
-    /* ── URL bar at the bottom ───────────────────────── */
-    .focus-url-bar {
-      padding: 3px 12px;
-      background: #161625;
-      border-top: 1px solid #2a2a40;
-      font-size: 11px;
-      color: #555;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex-shrink: 0;
-    }
   </style>
 </head>
 <body>
@@ -242,8 +252,6 @@
       </div>
     </div>
 
-    <!-- Bottom URL bar -->
-    <div class="focus-url-bar" id="url-bar">—</div>
   </div>
 
   <script>
@@ -259,11 +267,10 @@
     const logPanel = document.getElementById('log-panel');
     const logBody = document.getElementById('log-body');
     const logCount = document.getElementById('log-count');
-    const urlBar = document.getElementById('url-bar');
-
     let botId = null;
     let logEntryCount = 0;
     let logsOpen = false;
+    let lastFrameUrl = null;
 
     const api = window.focusApi;
 
@@ -306,8 +313,30 @@
 
       const isRunning = status === 'running';
       const isPaused = status === 'paused';
+      const isDone = status === 'done' || status === 'error' || status === 'dropped';
       btnPause.disabled = !isRunning;
       btnResume.disabled = !isPaused;
+
+      if (isDone) {
+        // Show last frame if available, or a "no frames" message
+        if (lastFrameUrl) {
+          img.src = lastFrameUrl;
+          img.style.display = 'block';
+          placeholder.style.display = 'none';
+        } else {
+          placeholder.textContent = 'No frames received.';
+          placeholder.style.display = 'flex';
+        }
+
+        // Add "Session Complete" overlay badge
+        const pane = document.querySelector('.focus-screenshot-pane');
+        if (pane && !pane.querySelector('.focus-done-overlay')) {
+          const overlay = document.createElement('div');
+          overlay.className = 'focus-done-overlay';
+          overlay.innerHTML = '<div class="focus-done-badge">Session Complete</div>';
+          pane.appendChild(overlay);
+        }
+      }
     }
 
     function setState(state) {
@@ -333,6 +362,7 @@
     if (api) {
       // Live screenshot stream
       api.onScreenshot((dataUrl) => {
+        lastFrameUrl = dataUrl;
         img.src = dataUrl;
         img.style.display = 'block';
         placeholder.style.display = 'none';

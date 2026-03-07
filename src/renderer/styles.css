@@ -1,6 +1,6 @@
 /* src/renderer/styles.css
  * ──────────────────────────────────────────────────────────────
- * Grid layout styles for the oTree Bots Electron renderer.
+ * Grid layout styles for the oBots Electron renderer.
  * Uses CSS Custom Properties for dynamic grid dimensions.
  * ────────────────────────────────────────────────────────────── */
 
@@ -145,6 +145,10 @@ html, body {
   border-color: #4da8ff;
 }
 
+.bot-card--stale {
+  border-color: #ff9800;
+}
+
 .bot-card--error {
   border-color: #e94560;
 }
@@ -198,6 +202,7 @@ html, body {
 .bot-card__status-dot--paused   { background: #ffc107; }
 .bot-card__status-dot--done     { background: #4caf50; }
 .bot-card__status-dot--dropped  { background: #4da8ff; }
+.bot-card__status-dot--stale    { background: #ff9800; animation: pulse 2s infinite; }
 .bot-card__status-dot--error    { background: #e94560; }
 
 @keyframes pulse {
@@ -445,6 +450,10 @@ select.setup-card__input {
   grid-column: span 3;
 }
 
+.strategy-grid__field--third {
+  grid-column: span 2;
+}
+
 /* ── Speed Control ─────────────────────────────────────────── */
 
 .speed-control {
@@ -521,6 +530,10 @@ select.setup-card__input--sm {
   .strategy-grid__field--half {
     grid-column: span 1;
   }
+
+  .strategy-grid__field--third {
+    grid-column: span 1;
+  }
 }
 
 @media (max-width: 920px) {
@@ -548,6 +561,10 @@ select.setup-card__input--sm {
 
   .strategy-grid__field--half {
     grid-column: span 2;
+  }
+
+  .strategy-grid__field--third {
+    grid-column: span 1;
   }
 }
 
@@ -580,6 +597,10 @@ select.setup-card__input--sm {
     grid-column: span 1;
   }
 
+  .strategy-grid__field--third {
+    grid-column: span 1;
+  }
+
   .setup-card__actions {
     justify-content: stretch;
   }
@@ -593,7 +614,7 @@ select.setup-card__input--sm {
 
 #loading {
   position: fixed;
-  inset: 0;
+  inset: 36px 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -718,39 +739,6 @@ select.setup-card__input--sm {
   color: #d5dcf2;
   font-size: 12px;
   padding: 0 8px;
-}
-
-/* ── Drawer Tabs ───────────────────────────────────────────── */
-
-.log-drawer__tabs {
-  display: flex;
-  gap: 0;
-  overflow-x: auto;
-  background: #111730;
-  border-bottom: 1px solid #2b3357;
-  min-height: 30px;
-  scrollbar-width: thin;
-}
-
-.log-drawer__tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #8892b3;
-  font-size: 11px;
-  padding: 6px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.log-drawer__tab:hover {
-  color: #cad1e9;
-}
-
-.log-drawer__tab--active {
-  color: #e94560;
-  border-bottom-color: #e94560;
 }
 
 /* ── Drawer Body ───────────────────────────────────────────── */

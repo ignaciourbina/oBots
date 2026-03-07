@@ -2,11 +2,12 @@
 // ──────────────────────────────────────────────────────────────
 // Renderer process — receives IPC events from main process and
 // updates the DOM grid. Runs in the browser context with the
-// preload-exposed `window.otreeBots` API.
+// preload-exposed `window.oBots` API.
 // ──────────────────────────────────────────────────────────────
 
 // Type declarations for the preload-exposed API
-interface OtreeBotsApi {
+interface OBotsApi {
+  onStartFailed: (cb: (data: { message: string }) => void) => void;
   onGridLayout: (cb: (layout: GridLayout) => void) => void;
   onBotStatus: (cb: (data: { id: string; index: number; status: string }) => void) => void;
   onBotStateChange: (cb: (data: { id: string; index: number; state: string }) => void) => void;
@@ -28,6 +29,9 @@ interface StrategyPayload {
   submitDelay: number;
   actionDelayMs: number;
   actionJitterMs: number;
+  staleProbability: number;
+  staleExtraDelayMs: number;
+  dropProbability: number;
 }
 
 interface StartCommandPayload {
@@ -61,7 +65,7 @@ interface LogEntry {
 
 // Extend Window type for preload API
 interface Window {
-  otreeBots: OtreeBotsApi;
+  oBots: OBotsApi;
 }
 
 // ── State ───────────────────────────────────────────────────
@@ -126,12 +130,17 @@ const stratSpeedSlider = document.getElementById('strat-speed') as HTMLInputElem
 const stratSpeedLabel = document.getElementById('strat-speed-label') as HTMLSpanElement;
 const stratJitterSlider = document.getElementById('strat-jitter') as HTMLInputElement;
 const stratJitterLabel = document.getElementById('strat-jitter-label') as HTMLSpanElement;
+const staleProbSlider = document.getElementById('stale-prob') as HTMLInputElement;
+const staleProbLabel = document.getElementById('stale-prob-label') as HTMLSpanElement;
+const staleDelaySlider = document.getElementById('stale-delay') as HTMLInputElement;
+const staleDelayLabel = document.getElementById('stale-delay-label') as HTMLSpanElement;
+const dropProbSlider = document.getElementById('drop-prob') as HTMLInputElement;
+const dropProbLabel = document.getElementById('drop-prob-label') as HTMLSpanElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
 const setupRepeatInput = document.getElementById('setup-repeat') as HTMLInputElement;
 
 // ── Log Drawer DOM References ───────────────────────────────
 const logDrawer = document.getElementById('log-drawer') as HTMLDivElement;
-const logDrawerTabs = document.getElementById('log-drawer-tabs') as HTMLDivElement;
 const logDrawerBody = document.getElementById('log-drawer-body') as HTMLDivElement;
 const logBotSelect = document.getElementById('log-bot-select') as HTMLSelectElement;
 const btnLogBotPrev = document.getElementById('log-bot-prev') as HTMLButtonElement;
@@ -147,11 +156,11 @@ let runRequested = false;
  */
 /** Strategy presets — mirrors STRATEGY_PRESETS from types.ts */
 const PRESETS: Record<string, Omit<StrategyPayload, 'name'>> = {
-  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
-  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
-  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
-  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
-  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0 },
+  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
 };
 
 /** Apply a preset's values to the strategy detail controls */
@@ -168,6 +177,12 @@ function applyPreset(key: string): void {
   stratSpeedLabel.textContent = `${preset.actionDelayMs} ms`;
   stratJitterSlider.value = String(preset.actionJitterMs);
   stratJitterLabel.textContent = `${preset.actionJitterMs} ms`;
+  staleProbSlider.value = String(preset.staleProbability * 100);
+  staleProbLabel.textContent = `${Math.round(preset.staleProbability * 100)}%`;
+  staleDelaySlider.value = String(preset.staleExtraDelayMs);
+  staleDelayLabel.textContent = `${preset.staleExtraDelayMs} ms`;
+  dropProbSlider.value = String(preset.dropProbability * 100);
+  dropProbLabel.textContent = `${Math.round(preset.dropProbability * 100)}%`;
 }
 
 /** Read the full strategy object from the detail controls */
@@ -185,6 +200,9 @@ function readStrategy(): StrategyPayload {
     submitDelay: 0,
     actionDelayMs: Number(stratSpeedSlider.value) || 0,
     actionJitterMs: Number(stratJitterSlider.value) || 0,
+    staleProbability: (Number(staleProbSlider.value) || 0) / 100,
+    staleExtraDelayMs: Number(staleDelaySlider.value) || 0,
+    dropProbability: (Number(dropProbSlider.value) || 0) / 100,
   };
 }
 
@@ -242,6 +260,7 @@ function resetToSetupScreen(): void {
   setupScreen.classList.remove('hidden');
   setupError.textContent = '';
   toolbarStatus.textContent = 'Configure run and click Launch Run';
+  toolbarStatus.style.color = '';
   btnRestart.disabled = true;
   btnStop.disabled = true;
   updateOverviewButton();
@@ -329,6 +348,21 @@ function initializeSetupForm(): void {
   // Jitter slider label sync
   stratJitterSlider.addEventListener('input', () => {
     stratJitterLabel.textContent = `${stratJitterSlider.value} ms`;
+  });
+
+  // Stale probability slider label sync
+  staleProbSlider.addEventListener('input', () => {
+    staleProbLabel.textContent = `${staleProbSlider.value}%`;
+  });
+
+  // Stale extra delay slider label sync
+  staleDelaySlider.addEventListener('input', () => {
+    staleDelayLabel.textContent = `${staleDelaySlider.value} ms`;
+  });
+
+  // Drop probability slider label sync
+  dropProbSlider.addEventListener('input', () => {
+    dropProbLabel.textContent = `${dropProbSlider.value}%`;
   });
 
   setupUrlInjectionEnabled.addEventListener('change', () => {
@@ -509,21 +543,10 @@ function refreshDrawerNavigatorButtons(): void {
 
 /**
  * Scroll to and highlight the selected bot card in the grid.
+ * (No-op: bot tiles are BrowserViews, not DOM elements.)
  */
-function focusBotCard(botId: string): void {
-  const state = botCards.get(botId);
-  if (!state) return;
-
-  const card = document.getElementById(`bot-card-${state.index}`) as HTMLDivElement | null;
-  if (!card) return;
-
-  card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  card.classList.remove('bot-card--active-focus');
-  // Force restart of highlight animation if repeatedly selecting the same bot.
-  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-  card.offsetHeight;
-  card.classList.add('bot-card--active-focus');
-  window.setTimeout(() => card.classList.remove('bot-card--active-focus'), 900);
+function focusBotCard(_botId: string): void {
+  // Tiles are rendered in separate BrowserView processes — nothing to scroll/highlight.
 }
 
 /**
@@ -543,7 +566,7 @@ function moveDrawerBotSelection(direction: -1 | 1): void {
   switchDrawerTab(sortedIds[nextIndex]);
 }
 
-/** Rebuild the tab bar to reflect all known bots */
+/** Refresh drawer navigation (dropdown + prev/next buttons) */
 function refreshDrawerTabs(): void {
   const sortedIds = getSortedBotIds();
   if (drawerActiveTab && !sortedIds.includes(drawerActiveTab)) {
@@ -553,30 +576,13 @@ function refreshDrawerTabs(): void {
     drawerActiveTab = sortedIds[0];
   }
 
-  logDrawerTabs.innerHTML = '';
-
-  for (const botId of sortedIds) {
-    const botState = botCards.get(botId);
-    const label = botState ? `Bot #${botState.index}` : botId;
-    const tab = document.createElement('button');
-    tab.className = `log-drawer__tab${drawerActiveTab === botId ? ' log-drawer__tab--active' : ''}`;
-    tab.dataset.bot = botId;
-    tab.textContent = label;
-    tab.addEventListener('click', () => switchDrawerTab(botId));
-    logDrawerTabs.appendChild(tab);
-  }
-
   refreshDrawerNavigator();
   refreshDrawerNavigatorButtons();
 }
 
-/** Switch the active drawer tab and re-render log entries */
+/** Switch the active drawer bot and re-render log entries */
 function switchDrawerTab(tabId: string): void {
   drawerActiveTab = tabId;
-  // Highlight active tab
-  logDrawerTabs.querySelectorAll('.log-drawer__tab').forEach((t) => {
-    (t as HTMLElement).classList.toggle('log-drawer__tab--active', (t as HTMLElement).dataset.bot === tabId);
-  });
   logBotSelect.value = tabId;
   refreshDrawerNavigatorButtons();
   focusBotCard(tabId);
@@ -647,12 +653,12 @@ function openDrawerForBot(botId: string): void {
 // ── Event Wiring ────────────────────────────────────────────
 
 console.log('[renderer] renderer.js executing…');
-console.log('[renderer] window.otreeBots =', typeof (window as any).otreeBots);
+console.log('[renderer] window.oBots =', typeof (window as any).oBots);
 
-const api = (window as any).otreeBots as OtreeBotsApi | undefined;
+const api = (window as any).oBots as OBotsApi | undefined;
 
 if (!api) {
-  console.error('[renderer] FATAL: window.otreeBots is undefined — preload did not run!');
+  console.error('[renderer] FATAL: window.oBots is undefined — preload did not run!');
   const errDiv = document.createElement('div');
   errDiv.style.cssText = 'color:red;padding:40px;font-size:18px;text-align:center;';
   errDiv.textContent = 'ERROR: Preload bridge not available. Check console.';
@@ -683,6 +689,12 @@ if (!api) {
   });
   refreshDrawerTabs();
   updateOverviewButton();
+
+  api.onStartFailed((data: { message: string }) => {
+    console.error('[renderer] run:start-failed:', data.message);
+    resetToSetupScreen();
+    showSetupError(`Start failed: ${data.message}`);
+  });
 
   api.onGridLayout((layout: GridLayout) => {
     console.log('[renderer] grid:layout received', JSON.stringify(layout));

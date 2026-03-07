@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';" />
-  <title>oTree Bots</title>
+  <title>oBots — Open Bot Online Testing Suite</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,11 +13,11 @@
   <!-- Welcome / setup overlay -->
   <div id="setup-screen">
     <form id="setup-form" class="setup-card">
-      <h1 class="setup-card__title">Welcome to oTree Bots</h1>
-      <p class="setup-card__subtitle">Review or override startup parameters, then launch the run.</p>
+      <h1 class="setup-card__title">Welcome to oBots</h1>
+      <p class="setup-card__subtitle">Open Bot Online Testing Suite — configure and launch your bot run.</p>
 
       <label class="setup-card__label" for="setup-url">Game URL</label>
-      <input id="setup-url" class="setup-card__input" type="url" placeholder="http://localhost:8000/join/abc123" required />
+      <input id="setup-url" class="setup-card__input" type="text" placeholder="http://localhost:8000/join/abc123" required />
 
       <label class="setup-card__check" for="setup-url-injection-enabled">
         <input id="setup-url-injection-enabled" type="checkbox" />
@@ -131,7 +131,35 @@
             <input id="strat-jitter" type="range" class="speed-control__slider" min="0" max="2000" step="50" value="0" />
             <span id="strat-jitter-label" class="speed-control__label">0 ms</span>
           </div>
-          <span class="strategy-grid__hint">Random ±delay added per action for human-like timing (0 = deterministic)</span>
+          <span class="strategy-grid__hint">Random +delay added per action for human-like timing (0 = deterministic)</span>
+        </div>
+      </div>
+
+      <!-- Stale / Drop behaviour -->
+      <div class="strategy-grid" style="margin-top:8px">
+        <div class="strategy-grid__field strategy-grid__field--third">
+          <label class="strategy-grid__label" for="stale-prob">Stale probability</label>
+          <div class="speed-control">
+            <input id="stale-prob" type="range" class="speed-control__slider" min="0" max="100" step="1" value="0" />
+            <span id="stale-prob-label" class="speed-control__label">0%</span>
+          </div>
+          <span class="strategy-grid__hint">Chance a bot stalls on each page</span>
+        </div>
+        <div class="strategy-grid__field strategy-grid__field--third">
+          <label class="strategy-grid__label" for="stale-delay">Stale extra delay</label>
+          <div class="speed-control">
+            <input id="stale-delay" type="range" class="speed-control__slider" min="0" max="60000" step="500" value="0" />
+            <span id="stale-delay-label" class="speed-control__label">0 ms</span>
+          </div>
+          <span class="strategy-grid__hint">How long a stale bot waits before resuming</span>
+        </div>
+        <div class="strategy-grid__field strategy-grid__field--third">
+          <label class="strategy-grid__label" for="drop-prob">Drop probability</label>
+          <div class="speed-control">
+            <input id="drop-prob" type="range" class="speed-control__slider" min="0" max="100" step="1" value="0" />
+            <span id="drop-prob-label" class="speed-control__label">0%</span>
+          </div>
+          <span class="strategy-grid__hint">Chance a stale bot drops out permanently</span>
         </div>
       </div>
 
@@ -151,7 +179,7 @@
 
   <!-- Toolbar -->
   <div id="toolbar">
-    <span class="toolbar__title">oTree Bots</span>
+    <span class="toolbar__title">oBots</span>
     <button id="btn-logs" class="toolbar__btn toolbar__btn--logs" title="Toggle decision log">&#9776; Logs</button>
     <button id="btn-overview" class="toolbar__btn toolbar__btn--overview" title="Bird's-eye progress view">Overview</button>
     <span id="toolbar-status" class="toolbar__status">Waiting…</span>
@@ -176,9 +204,6 @@
         <option value="all">All Bots</option>
       </select>
       <button id="log-bot-next" class="log-drawer__nav-btn" title="Next bot">&rarr;</button>
-    </div>
-    <div id="log-drawer-tabs" class="log-drawer__tabs">
-      <!-- Bot tabs injected dynamically by renderer.ts -->
     </div>
     <div id="log-drawer-body" class="log-drawer__body">
       <div class="log-drawer__empty">No log entries yet.</div>

@@ -10,7 +10,7 @@ import type { Browser, Page } from 'puppeteer';
 
 /**
  * A BotScript defines the finite-state-machine that drives one bot
- * through an oTree game session.
+ * through a behavioral experiment session.
  */
 export interface BotScript {
   /** Human-readable name shown in the grid tile */
@@ -105,7 +105,7 @@ export interface BotConfig {
 
 // ── Bot Instance (runtime) ──────────────────────────────────
 
-export type BotStatus = 'idle' | 'running' | 'paused' | 'done' | 'dropped' | 'error';
+export type BotStatus = 'idle' | 'running' | 'paused' | 'stale' | 'dropped' | 'done' | 'error';
 
 export interface LogEntry {
   timestamp: number;
@@ -169,6 +169,7 @@ export interface GridSlot {
 
 export enum IpcChannel {
   // Main → Renderer
+  EVT_START_FAILED = 'run:start-failed',
   GRID_LAYOUT      = 'grid:layout',
   BOT_STATUS       = 'bot:status',
   BOT_STATE_CHANGE = 'bot:state-change',
@@ -247,6 +248,12 @@ export interface BotStrategy {
   actionDelayMs: number;
   /** Maximum random jitter (ms) added to each action delay (0 = deterministic) */
   actionJitterMs: number;
+  /** Probability (0–1) that a bot becomes stale on any given page/state (0 = never) */
+  staleProbability: number;
+  /** Extra delay in ms a stale bot waits before proceeding */
+  staleExtraDelayMs: number;
+  /** Probability (0–1) that a stale bot drops out entirely (0 = never) */
+  dropProbability: number;
 }
 
 /** Built-in strategy presets */
@@ -262,6 +269,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
+    staleProbability: 0,
+    staleExtraDelayMs: 0,
+    dropProbability: 0,
   },
   minimum: {
     name: 'Minimum',
@@ -274,6 +284,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
+    staleProbability: 0,
+    staleExtraDelayMs: 0,
+    dropProbability: 0,
   },
   maximum: {
     name: 'Maximum',
@@ -286,6 +299,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
+    staleProbability: 0,
+    staleExtraDelayMs: 0,
+    dropProbability: 0,
   },
   midpoint: {
     name: 'Midpoint',
@@ -298,6 +314,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
+    staleProbability: 0,
+    staleExtraDelayMs: 0,
+    dropProbability: 0,
   },
   fixed: {
     name: 'Fixed (5)',
@@ -310,6 +329,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
+    staleProbability: 0,
+    staleExtraDelayMs: 0,
+    dropProbability: 0,
   },
 };
 

@@ -2,13 +2,14 @@
 // ──────────────────────────────────────────────────────────────
 // FSM interpreter — pure engine that takes a BotScript + Page
 // and runs until a terminal state is reached or an error occurs.
-// No knowledge of Electron, grid, or oTree specifics.
+// No knowledge of Electron, grid, or experiment-platform specifics.
 // ──────────────────────────────────────────────────────────────
 
 import type { Page } from 'puppeteer';
 import {
   BotScript,
   BotStatus,
+  BotStrategy,
   DEFAULTS,
   LogEntry,
   Transition,
@@ -33,6 +34,10 @@ export class StateMachineRunner {
   private readonly actionDelayMs: number;
   private readonly actionJitterMs: number;
 
+  private readonly staleProbability: number;
+  private readonly staleExtraDelayMs: number;
+  private readonly dropProbability: number;
+
   constructor(
     private readonly botId: string,
     private readonly script: BotScript,
@@ -41,10 +46,14 @@ export class StateMachineRunner {
     private readonly delayMultiplier: number = 1.0,
     actionDelayMs: number = 0,
     actionJitterMs: number = 0,
+    strategy?: BotStrategy,
   ) {
     this._currentState = script.initialState;
     this.actionDelayMs = actionDelayMs;
     this.actionJitterMs = actionJitterMs;
+    this.staleProbability = strategy?.staleProbability ?? 0;
+    this.staleExtraDelayMs = strategy?.staleExtraDelayMs ?? 0;
+    this.dropProbability = strategy?.dropProbability ?? 0;
   }
 
   get status(): BotStatus {
@@ -148,7 +157,46 @@ export class StateMachineRunner {
         }
       }
 
-      // 2. If this is a final state → done
+      // 2. Stale/drop check — roll dice after onEntry actions
+      if (this._status === 'running' && this.staleProbability > 0 && !stateDef.final) {
+        if (Math.random() < this.staleProbability) {
+          // Bot becomes stale on this page
+          this._status = 'stale';
+          this.callbacks.onStatusChange(this.botId, 'stale');
+          this.callbacks.onLog(this.botId, {
+            timestamp: Date.now(),
+            level: 'warn',
+            message: `Bot went stale in state "${this._currentState}" — delaying ${this.staleExtraDelayMs}ms`,
+          });
+
+          await sleep(this.staleExtraDelayMs);
+
+          // While stale, check if bot drops
+          if (this.dropProbability > 0 && Math.random() < this.dropProbability) {
+            this._status = 'dropped';
+            this.callbacks.onStatusChange(this.botId, 'dropped');
+            this.callbacks.onLog(this.botId, {
+              timestamp: Date.now(),
+              level: 'warn',
+              message: `Bot dropped out in state "${this._currentState}"`,
+            });
+            return;
+          }
+
+          // Recover from stale → running
+          this._status = 'running';
+          this.callbacks.onStatusChange(this.botId, 'running');
+          this.callbacks.onLog(this.botId, {
+            timestamp: Date.now(),
+            level: 'info',
+            message: `Bot recovered from stale in state "${this._currentState}"`,
+          });
+        }
+      }
+
+      if (this._status !== 'running') return;
+
+      // 3. If this is a final state → done
       if (stateDef.final) {
         this._status = 'done';
         this.callbacks.onStatusChange(this.botId, 'done');
