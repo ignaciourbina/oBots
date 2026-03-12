@@ -2,8 +2,8 @@
 // ──────────────────────────────────────────────────────────────
 // Centralized logging built on winston.
 //
-// - Console transport: coloured, human-readable
 // - File transport: JSON lines, daily-rotated, kept for 14 days
+// - Error file transport: errors only, kept for 30 days
 //
 // Usage:
 //   import { logger, createChildLogger } from './logger';
@@ -36,20 +36,7 @@ function getLogDir(): string {
 
 // ── Formats ──────────────────────────────────────────────────
 
-const { combine, timestamp, printf, colorize, errors, json, splat } = winston.format;
-
-/** Pretty console format: 2026-02-19 14:05:32 [main] INFO  message */
-const consoleFmt = combine(
-  colorize({ level: true }),
-  timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  errors({ stack: true }),
-  splat(),
-  printf(({ timestamp: ts, level, message, component, ...rest }) => {
-    const comp = component ? `[${component}]` : '[app]';
-    const meta = Object.keys(rest).length ? ' ' + JSON.stringify(rest) : '';
-    return `${ts} ${comp} ${level}: ${message}${meta}`;
-  }),
-);
+const { combine, timestamp, errors, json, splat } = winston.format;
 
 /** Structured JSON format for file transport */
 const fileFmt = combine(
@@ -60,10 +47,6 @@ const fileFmt = combine(
 );
 
 // ── Transports ───────────────────────────────────────────────
-
-const consoleTransport = new winston.transports.Console({
-  format: consoleFmt,
-});
 
 const fileTransport = new DailyRotateFile({
   dirname: getLogDir(),
@@ -90,7 +73,6 @@ const errorFileTransport = new DailyRotateFile({
 export const logger = winston.createLogger({
   level: 'info',         // default — raised to 'debug' by setVerbose()
   transports: [
-    consoleTransport,
     fileTransport,
     errorFileTransport,
   ],
@@ -101,13 +83,12 @@ export const logger = winston.createLogger({
 // ── API ──────────────────────────────────────────────────────
 
 /**
- * Enable verbose (debug-level) output on the console transport.
+ * Enable verbose (debug-level) file output.
  * Called when `--verbose` is passed on the CLI.
  */
 export function setVerbose(enabled: boolean): void {
   if (enabled) {
     logger.level = 'debug';
-    consoleTransport.level = 'debug';
     logger.debug('Verbose logging enabled');
   }
 }

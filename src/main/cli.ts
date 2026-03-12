@@ -76,6 +76,11 @@ export function parseCLI(argv?: string[]): AppConfig {
       description: 'Verbose logging',
       default: false,
     })
+    .option('devtools', {
+      type: 'boolean',
+      description: 'Open Electron DevTools on launch',
+      default: false,
+    })
     .example(
       '$0 run -u http://localhost:8000/join/xyzabc -n 4 -s ./bots/public-goods.js',
       'Run 4 bots with a bot script',
@@ -108,6 +113,7 @@ export function parseCLI(argv?: string[]): AppConfig {
     delayMultiplier: args.delay as number,
     headless: args.headless as boolean,
     debug: args.verbose as boolean,
+    devtools: args.devtools as boolean,
     strategy,
   };
 }

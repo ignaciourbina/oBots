@@ -692,7 +692,7 @@ app.whenReady().then(async () => {
     mainWindow = await createWindow(baseConfig);
     log.info('Window created, renderer + preload loaded');
 
-    if (baseConfig.debug) {
+    if (baseConfig.devtools) {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
 

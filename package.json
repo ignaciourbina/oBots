@@ -11,6 +11,7 @@
     "watch": "tsc --watch",
     "start": "npm run build && electron dist/main/index.js",
     "dev": "npm run build && electron dist/main/index.js --verbose",
+    "dev:devtools": "npm run build && electron dist/main/index.js --verbose --devtools",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:e2e": "vitest run test/e2e",

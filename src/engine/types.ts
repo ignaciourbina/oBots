@@ -350,6 +350,7 @@ export interface AppConfig {
   delayMultiplier: number;
   headless: boolean;
   debug: boolean;
+  devtools: boolean;
   strategy: BotStrategy;
 }
 
@@ -374,6 +375,10 @@ export const DEFAULTS = {
   // watchdog force-drops the bot.
   botStateStaleTimeoutMs: 60_000,
   botStateStaleCheckIntervalMs: 5_000,
+  // How often (ms) the stale/drop dice are rolled per bot.
+  // Rolling once every 30 s means the probability is per 30-second interval,
+  // not per page visit or state change.
+  dropCheckIntervalMs: 30_000,
   // Dropout simulation window for bots selected by dropoutRatePercent.
   // Actual bounds are computed dynamically from action-delay settings and
   // the runtime budget — these are only the absolute floor / ceiling.
@@ -386,6 +391,8 @@ export const DEFAULTS = {
   // Per-bot caps after budget allocation by active bot count.
   screenshotMinPerBotFps: 4,
   screenshotMaxPerBotFps: 20,
+  // CDP screencast everyNthFrame — 2 = ~30 fps on a 60 fps page.
+  screenshotEveryNthFrame: 2,
   // Lower JPEG quality improves throughput when many bots are active.
   screenshotQuality: 40,
   // Smaller capture viewport reduces encode/decode cost per frame.

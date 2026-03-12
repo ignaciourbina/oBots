@@ -379,7 +379,7 @@ export class BotRunner {
       quality: 80,
       maxWidth: cw,
       maxHeight: ch,
-      everyNthFrame: 1,
+      everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
     });
 
     // Re-sync viewport + screencast when focus window is resized
@@ -396,7 +396,7 @@ export class BotRunner {
           quality: 80,
           maxWidth: w,
           maxHeight: h,
-          everyNthFrame: 1,
+          everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
         }).catch(() => {});
       }, 200);
     });
@@ -496,7 +496,7 @@ export class BotRunner {
       quality: 60,       // lower quality for grid tiles (small)
       maxWidth: scW,
       maxHeight: scH,
-      everyNthFrame: 1,
+      everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
     });
 
     this.syslog.info('Grid screencast started for bot #%d (%s) — %d×%d',

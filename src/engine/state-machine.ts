@@ -38,8 +38,8 @@ export class StateMachineRunner {
   private readonly staleExtraDelayMs: number;
   private readonly dropProbability: number;
 
-  /** Last page URL when we rolled the stale dice — prevents multiple rolls per page */
-  private _lastStaleCheckUrl: string | null = null;
+  /** Timestamp of the last stale/drop dice roll — throttles checks to once per interval */
+  private _lastDropCheckAt: number = 0;
 
   constructor(
     private readonly botId: string,
@@ -160,17 +160,15 @@ export class StateMachineRunner {
         }
       }
 
-      // 2. Stale/drop check — roll dice only on page progress (URL change)
-      let currentUrl: string | null = null;
-      if (this._status === 'running' && this.staleProbability > 0 && !stateDef.final) {
-        try {
-          currentUrl = this.page.url();
-        } catch {
-          // page may be navigating — skip this check
-        }
-      }
-      if (currentUrl && currentUrl !== this._lastStaleCheckUrl) {
-        this._lastStaleCheckUrl = currentUrl;
+      // 2. Stale/drop check — roll dice at most once per dropCheckIntervalMs
+      const now = Date.now();
+      if (
+        this._status === 'running' &&
+        this.staleProbability > 0 &&
+        !stateDef.final &&
+        now - this._lastDropCheckAt >= DEFAULTS.dropCheckIntervalMs
+      ) {
+        this._lastDropCheckAt = now;
         if (Math.random() < this.staleProbability) {
           // Bot becomes stale on this page
           this._status = 'stale';
