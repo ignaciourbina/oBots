@@ -7,6 +7,7 @@
 import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { AppConfig, BotScript, DEFAULT_STRATEGY, DEFAULTS, BotStrategy, IpcChannel, UrlInjectionConfig } from '../engine/types';
+import type { MessageCategory } from '../engine/message-bank';
 import { parseCLI } from './cli';
 import { GridManager } from './grid-manager';
 import { SessionRegistry } from './session-registry';
@@ -407,6 +408,9 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           staleProbability: Number(start.strategy.staleProbability) || 0,
           staleExtraDelayMs: Number(start.strategy.staleExtraDelayMs) || 0,
           dropProbability: Number(start.strategy.dropProbability) || 0,
+          messageBankCategories: Array.isArray(start.strategy.messageBankCategories)
+            ? start.strategy.messageBankCategories as MessageCategory[]
+            : undefined,
         }
       : baseConfig.strategy;
     const runConfig: AppConfig = {

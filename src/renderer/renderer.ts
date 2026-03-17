@@ -32,6 +32,7 @@ interface StrategyPayload {
   staleProbability: number;
   staleExtraDelayMs: number;
   dropProbability: number;
+  messageBankCategories?: string[];
 }
 
 interface StartCommandPayload {
@@ -136,6 +137,8 @@ const staleDelaySlider = document.getElementById('stale-delay') as HTMLInputElem
 const staleDelayLabel = document.getElementById('stale-delay-label') as HTMLSpanElement;
 const dropProbSlider = document.getElementById('drop-prob') as HTMLInputElement;
 const dropProbLabel = document.getElementById('drop-prob-label') as HTMLSpanElement;
+const msgBankEnabled = document.getElementById('msg-bank-enabled') as HTMLInputElement;
+const msgBankFields = document.getElementById('message-bank-fields') as HTMLDivElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
 const setupRepeatInput = document.getElementById('setup-repeat') as HTMLInputElement;
 
@@ -183,12 +186,22 @@ function applyPreset(key: string): void {
   staleDelayLabel.textContent = `${preset.staleExtraDelayMs} ms`;
   dropProbSlider.value = String(preset.dropProbability * 100);
   dropProbLabel.textContent = `${Math.round(preset.dropProbability * 100)}%`;
+  // Reset message bank (presets default to off)
+  msgBankEnabled.checked = false;
+  msgBankFields.classList.add('hidden');
 }
 
 /** Read the full strategy object from the detail controls */
 function readStrategy(): StrategyPayload {
   const presetKey = setupStrategySelect.value;
   const label = presetKey === 'custom' ? 'Custom' : (presetKey.charAt(0).toUpperCase() + presetKey.slice(1));
+
+  let messageBankCategories: string[] | undefined;
+  if (msgBankEnabled.checked) {
+    const checked = msgBankFields.querySelectorAll<HTMLInputElement>('input[data-category]:checked');
+    messageBankCategories = Array.from(checked).map((el) => el.dataset.category!);
+  }
+
   return {
     name: label,
     numberStrategy: stratNumberSelect.value,
@@ -203,6 +216,7 @@ function readStrategy(): StrategyPayload {
     staleProbability: (Number(staleProbSlider.value) || 0) / 100,
     staleExtraDelayMs: Number(staleDelaySlider.value) || 0,
     dropProbability: (Number(dropProbSlider.value) || 0) / 100,
+    messageBankCategories,
   };
 }
 
@@ -368,6 +382,18 @@ function initializeSetupForm(): void {
   setupUrlInjectionEnabled.addEventListener('change', () => {
     urlInjectionFields.classList.toggle('hidden', !setupUrlInjectionEnabled.checked);
   });
+
+  // Message bank toggle
+  msgBankEnabled.addEventListener('change', () => {
+    msgBankFields.classList.toggle('hidden', !msgBankEnabled.checked);
+    setupStrategySelect.value = 'custom';
+  });
+
+  // Category checkboxes switch preset to Custom
+  const catCheckboxes = Array.from(msgBankFields.querySelectorAll<HTMLInputElement>('input[data-category]'));
+  for (const cb of catCheckboxes) {
+    cb.addEventListener('change', () => { setupStrategySelect.value = 'custom'; });
+  }
 }
 
 // ── Grid Layout ─────────────────────────────────────────────

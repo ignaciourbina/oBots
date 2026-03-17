@@ -117,6 +117,47 @@
           <input id="strat-text" class="setup-card__input setup-card__input--sm" type="text" value="test" />
         </div>
 
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="setup-card__check" for="msg-bank-enabled">
+            <input id="msg-bank-enabled" type="checkbox" />
+            Use message bank for text fields
+          </label>
+          <span class="strategy-grid__hint">When enabled, bots pick a random pre-written message from the selected categories instead of typing the static text value above.</span>
+
+          <div id="message-bank-fields" class="strategy-grid hidden" style="margin-top:8px">
+            <div class="strategy-grid__field">
+              <label class="setup-card__check" for="msg-cat-cooperative">
+                <input id="msg-cat-cooperative" type="checkbox" data-category="cooperative" checked />
+                Cooperative
+              </label>
+            </div>
+            <div class="strategy-grid__field">
+              <label class="setup-card__check" for="msg-cat-competitive">
+                <input id="msg-cat-competitive" type="checkbox" data-category="competitive" checked />
+                Competitive / Self-interested
+              </label>
+            </div>
+            <div class="strategy-grid__field">
+              <label class="setup-card__check" for="msg-cat-neutral">
+                <input id="msg-cat-neutral" type="checkbox" data-category="neutral" checked />
+                Neutral / Ambiguous
+              </label>
+            </div>
+            <div class="strategy-grid__field">
+              <label class="setup-card__check" for="msg-cat-conditional">
+                <input id="msg-cat-conditional" type="checkbox" data-category="conditional" checked />
+                Conditional / Reciprocal
+              </label>
+            </div>
+            <div class="strategy-grid__field">
+              <label class="setup-card__check" for="msg-cat-blank">
+                <input id="msg-cat-blank" type="checkbox" data-category="blank" />
+                Blank / Minimal
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div class="strategy-grid__field strategy-grid__field--half">
           <label class="strategy-grid__label" for="strat-speed">Bot speed</label>
           <div class="speed-control">

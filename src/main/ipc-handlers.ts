@@ -27,6 +27,7 @@ export interface StrategyPayload {
   staleProbability: number;
   staleExtraDelayMs: number;
   dropProbability: number;
+  messageBankCategories?: string[];
 }
 
 export interface StartPayload {

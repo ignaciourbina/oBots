@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import type { Browser, Page } from 'puppeteer';
+import type { MessageCategory } from './message-bank';
 
 // ── Bot Script (user-authored) ──────────────────────────────
 
@@ -254,6 +255,8 @@ export interface BotStrategy {
   staleExtraDelayMs: number;
   /** Probability (0–1) that a stale bot drops out entirely (0 = never) */
   dropProbability: number;
+  /** Message bank categories to draw from for text/textarea fields (undefined = disabled) */
+  messageBankCategories?: MessageCategory[];
 }
 
 /** Built-in strategy presets */
