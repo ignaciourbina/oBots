@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm run:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh api:*)",
+      "Bash(gh repo:*)",
+      "Bash(GIT_ASKPASS= VSCODE_GIT_ASKPASS_MAIN= VSCODE_GIT_ASKPASS_NODE= git fetch:*)",
+      "Bash(GIT_ASKPASS= VSCODE_GIT_ASKPASS_MAIN= VSCODE_GIT_ASKPASS_NODE= GIT_TERMINAL_PROMPT=0 git:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
+  }
+}
