@@ -730,24 +730,9 @@ app.whenReady().then(async () => {
       }
     });
 
-    mainWindow.on('resize', () => {
-      scheduleGridRefresh('resize');
-    });
-    mainWindow.on('maximize', () => {
-      scheduleGridRefresh('maximize');
-    });
-    mainWindow.on('unmaximize', () => {
-      scheduleGridRefresh('unmaximize');
-    });
-    mainWindow.on('restore', () => {
-      scheduleGridRefresh('restore');
-    });
-    mainWindow.on('enter-full-screen', () => {
-      scheduleGridRefresh('enter-full-screen');
-    });
-    mainWindow.on('leave-full-screen', () => {
-      scheduleGridRefresh('leave-full-screen');
-    });
+    for (const event of ['resize', 'maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) {
+      mainWindow.on(event as 'resize', () => scheduleGridRefresh(event));
+    }
 
     // Headless mode has no setup form, so start immediately using CLI values.
     if (baseConfig.headless) {
