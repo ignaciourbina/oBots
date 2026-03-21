@@ -6,7 +6,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import path from 'path';
-import puppeteer, { Browser, CDPSession } from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import { BrowserWindow } from 'electron';
 import {
   BotInstance,
@@ -22,16 +22,7 @@ import { SessionRegistry } from './session-registry';
 import { createChildLogger } from './logger';
 import { GridManager } from './grid-manager';
 import { startScreencast, restartScreencast, stopScreencast } from './screencast';
-
-interface FocusSession {
-  win: BrowserWindow;
-  cdp: CDPSession;
-}
-
-interface GridScreencast {
-  cdp: CDPSession;
-  active: boolean;
-}
+import { BotSession } from './bot-session';
 
 const RETRIABLE_NAVIGATION_ERROR_TOKENS = [
   'ERR_CONNECTION_REFUSED',
@@ -47,9 +38,7 @@ const RETRIABLE_NAVIGATION_ERROR_TOKENS = [
 ];
 
 export class BotRunner {
-  private runners: Map<string, StateMachineRunner> = new Map();
-  private gridScreencasts: Map<string, GridScreencast> = new Map();
-  private focusSessions: Map<string, FocusSession> = new Map();
+  private sessions: Map<string, BotSession> = new Map();
   private readonly syslog = createChildLogger('bot-runner');
   private gridManager: GridManager | null = null;
   private allDoneCallback: (() => void) | null = null;
@@ -81,6 +70,16 @@ export class BotRunner {
     if (!this.win.isDestroyed()) {
       this.win.webContents.send(channel, ...args);
     }
+  }
+
+  /** Get or create a BotSession for the given bot ID. */
+  private getOrCreateSession(botId: string): BotSession {
+    let session = this.sessions.get(botId);
+    if (!session) {
+      session = new BotSession(botId);
+      this.sessions.set(botId, session);
+    }
+    return session;
   }
 
   /**
@@ -182,7 +181,7 @@ export class BotRunner {
         // Forward to grid BrowserView
         this.gridManager?.sendBotState(botId, newState);
         // Forward to focus window if open
-        this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATE, newState);
+        this.sessions.get(botId)?.sendToFocus(IpcChannel.FOCUS_BOT_STATE, newState);
       },
       onLog: (botId, entry) => {
         this.syslog[entry.level]('Bot %s: %s', botId, entry.message);
@@ -193,7 +192,7 @@ export class BotRunner {
           entry,
         });
         // Forward to focus window if open
-        this.sendToFocus(botId, IpcChannel.FOCUS_BOT_LOG, entry);
+        this.sessions.get(botId)?.sendToFocus(IpcChannel.FOCUS_BOT_LOG, entry);
       },
       onStatusChange: (botId, status) => {
         this.syslog.info('Bot %s status → %s', botId, status);
@@ -206,11 +205,11 @@ export class BotRunner {
         // Forward to grid BrowserView
         this.gridManager?.sendBotStatus(botId, status);
         // Forward to focus window if open
-        this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, status);
+        this.sessions.get(botId)?.sendToFocus(IpcChannel.FOCUS_BOT_STATUS, status);
 
         // Stop grid screencast when bot finishes
         if (isTerminalStatus(status)) {
-          this.stopGridScreencast(botId);
+          this.sessions.get(botId)?.stopGridScreencast();
         }
 
         // Check if all bots finished
@@ -236,7 +235,8 @@ export class BotRunner {
       strategy,
     );
 
-    this.runners.set(bot.id, runner);
+    const session = this.getOrCreateSession(bot.id);
+    session.runner = runner;
 
     // Start CDP screencast for the grid tile (replaces old screenshot loop)
     await this.startGridScreencast(bot);
@@ -251,16 +251,14 @@ export class BotRunner {
    * Pause a specific bot's FSM.
    */
   pauseBot(botId: string): void {
-    const runner = this.runners.get(botId);
-    if (runner) runner.pause();
+    this.sessions.get(botId)?.pauseFSM();
   }
 
   /**
    * Resume a paused bot's FSM.
    */
   resumeBot(botId: string): void {
-    const runner = this.runners.get(botId);
-    if (runner) runner.resume();
+    this.sessions.get(botId)?.resumeFSM();
   }
 
   /**
@@ -282,9 +280,9 @@ export class BotRunner {
     this.syslog.warn('Force-finishing bot %s: %s', botId, reason);
     this.log(botId, 'warn', `Force-finished: ${reason}`);
 
-    const runner = this.runners.get(botId);
-    if (runner) {
-      runner.stop(finalStatus);
+    const session = this.sessions.get(botId);
+    if (session?.runner) {
+      session.runner.stop(finalStatus);
       return true;
     }
 
@@ -296,8 +294,8 @@ export class BotRunner {
       status: finalStatus,
     });
     this.gridManager?.sendBotStatus(botId, finalStatus);
-    this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, finalStatus);
-    this.stopGridScreencast(botId);
+    session?.sendToFocus(IpcChannel.FOCUS_BOT_STATUS, finalStatus);
+    session?.stopGridScreencast();
 
     if (this.registry.allFinished()) {
       this.safeSend(IpcChannel.ALL_DONE);
@@ -313,9 +311,10 @@ export class BotRunner {
    * If one is already open, focus it instead of creating a duplicate.
    */
   async openFocusWindow(botId: string): Promise<void> {
-    const existing = this.focusSessions.get(botId);
-    if (existing && !existing.win.isDestroyed()) {
-      existing.win.focus();
+    const session = this.getOrCreateSession(botId);
+    const existingWin = session.getFocusWindow();
+    if (existingWin) {
+      existingWin.focus();
       return;
     }
 
@@ -394,7 +393,7 @@ export class BotRunner {
       }, 200);
     });
 
-    this.focusSessions.set(botId, { win: focusWin, cdp });
+    session.setFocusSession(focusWin, cdp);
     this.syslog.info('Focus window opened (live screencast) for %s', label);
 
     // Store original viewport to restore on close
@@ -404,7 +403,7 @@ export class BotRunner {
     focusWin.on('closed', () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       void stopScreencast(cdp);
-      this.focusSessions.delete(botId);
+      session.clearFocusSession();
       // Restore original viewport
       bot.page?.setViewport({ width: origWidth, height: origHeight }).catch(() => {});
       this.syslog.debug('Focus window closed for %s', label);
@@ -415,31 +414,16 @@ export class BotRunner {
    * Stop all bots and clean up.
    */
   async stopAll(): Promise<void> {
-    // Stop all grid screencasts
-    for (const [, gs] of this.gridScreencasts) {
-      gs.active = false;
-      void stopScreencast(gs.cdp);
+    for (const session of this.sessions.values()) {
+      session.cleanup();
     }
-    this.gridScreencasts.clear();
-
-    // Stop all FSM runners
-    for (const runner of this.runners.values()) {
-      runner.stop();
-    }
-
-    // Close all focus windows and stop their screencasts
-    for (const { win, cdp } of this.focusSessions.values()) {
-      void stopScreencast(cdp);
-      if (!win.isDestroyed()) win.close();
-    }
-    this.focusSessions.clear();
+    this.sessions.clear();
 
     // Destroy all BrowserViews
     this.gridManager?.destroyAllViews();
 
     // Destroy all browsers via registry
     await this.registry.destroyAll();
-    this.runners.clear();
   }
 
   // ── Grid CDP Screencast ───────────────────────────────
@@ -467,14 +451,14 @@ export class BotRunner {
 
     const cdp = await bot.page.createCDPSession();
 
-    const gs: GridScreencast = { cdp, active: true };
-    this.gridScreencasts.set(bot.id, gs);
+    const session = this.getOrCreateSession(bot.id);
+    session.setGridScreencast(cdp);
 
     await startScreencast(
       cdp,
       { format: 'jpeg', quality: 60, maxWidth: scW, maxHeight: scH, everyNthFrame: DEFAULTS.screenshotEveryNthFrame },
       (dataUrl) => {
-        if (gs.active) {
+        if (session.isGridActive) {
           this.gridManager?.sendScreenshot(bot.id, dataUrl);
         }
       },
@@ -492,28 +476,7 @@ export class BotRunner {
     });
   }
 
-  /**
-   * Stop a specific bot's grid screencast (e.g. when bot finishes).
-   */
-  private stopGridScreencast(botId: string): void {
-    const gs = this.gridScreencasts.get(botId);
-    if (gs) {
-      gs.active = false;
-      void stopScreencast(gs.cdp);
-      this.gridScreencasts.delete(botId);
-      this.syslog.debug('Grid screencast stopped for %s', botId);
-    }
-  }
-
   // ── Helpers ───────────────────────────────────────────
-
-  /** Send an IPC message to the focus window for a specific bot (if open). */
-  private sendToFocus(botId: string, channel: string, data: unknown): void {
-    const session = this.focusSessions.get(botId);
-    if (session && !session.win.isDestroyed()) {
-      session.win.webContents.send(channel, data);
-    }
-  }
 
   private log(botId: string, level: LogEntry['level'], message: string): void {
     const entry: LogEntry = { timestamp: Date.now(), level, message };

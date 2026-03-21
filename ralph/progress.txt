@@ -9,6 +9,13 @@ Sprint: Code Quality Deep Pass
 - Pre-existing test failures in `test/unit/state-machine.test.ts` (2 tests in stale/drop probability suite) — not related to TSDoc changes
 - bot-card.ts and toolbar.ts live at `src/renderer/` (moved from `components/` in US-002)
 - Shared renderer utilities go in `src/renderer/utils.ts` (escapeHtml lives there)
+- Use `isTerminalStatus()` from `src/engine/types.ts` instead of inline `=== 'done' || === 'dropped' || === 'error'` checks
+- `renderer.ts` receives status as `string` from IPC — cast with `as BotStatus` when calling typed engine functions
+- CDP screencast helpers live in `src/main/screencast.ts` — use `startScreencast`/`restartScreencast`/`stopScreencast` instead of raw CDP calls
+- Electron `BrowserWindow.on()` has per-event overloads — when iterating over event names in a loop, cast to a specific event (e.g., `as 'resize'`) to satisfy TypeScript
+- Dropout simulation lives in `src/main/dropout-simulator.ts` — use `DropoutSimulator` class instead of inline timer logic in index.ts
+- All IPC handlers live in `src/main/ipc-handlers.ts` — new IPC channels must be registered there and added to `removeIpcHandlers()` cleanup
+- Per-bot lifecycle resources (FSM runner, grid screencast, focus window) are encapsulated in `BotSession` (`src/main/bot-session.ts`) — BotRunner uses `Map<string, BotSession>` instead of separate Maps
 
 ## 2026-03-21 - US-001
 - Added TSDoc comments to 12 undocumented exported symbols (7 of 19 already had TSDoc)
@@ -39,4 +46,108 @@ Sprint: Code Quality Deep Pass
   - renderer.ts does not import from bot-card.ts or toolbar.ts — they are independent entry points for different renderer contexts
   - `focus.html` also has an inline JS `escapeHtml` — not covered by this story since it's in a separate HTML file, not a TS module
   - `git mv` correctly stages renames; just need to `rmdir` the empty directory afterward
+---
+
+## 2026-03-21 - US-003
+- Exported `isTerminalStatus(status: BotStatus): boolean` from `src/engine/types.ts`, placed right after the `BotStatus` type definition
+- Replaced all inline terminal-status checks across 4 files:
+  - `src/main/bot-runner.ts` — removed private `isTerminalStatus` method, replaced 2 call sites with imported function
+  - `src/main/index.ts` — replaced 2 inline checks (dropout timer guard + finished bots filter)
+  - `src/renderer/renderer.ts` — replaced 6-line inline check with 2-line `isTerminalStatus` calls
+  - `src/engine/state-machine.ts` — replaced inline check in `stop()` method
+- Files changed:
+  - `src/engine/types.ts` — added `isTerminalStatus` export
+  - `src/main/bot-runner.ts` — removed private method, updated imports
+  - `src/main/index.ts` — updated imports, replaced 2 inline checks
+  - `src/renderer/renderer.ts` — added import, replaced inline check
+  - `src/engine/state-machine.ts` — updated imports, replaced inline check
+- **Learnings for future iterations:**
+  - `renderer.ts` uses `string` type for status fields (from IPC), so `as BotStatus` cast is needed when calling `isTerminalStatus`
+  - `focus.html` has its own inline `escapeHtml` AND terminal-status check — it's a standalone HTML file not part of the TS module graph
+  - The `isTerminalStatus` function is now the single source of truth; when adding new terminal states, only `types.ts` needs updating
+---
+
+## 2026-03-21 - US-004
+- Added private `sendToBotView(botId, channel, data)` method to `GridManager` that encapsulates the get-check-send pattern
+- Simplified four public methods (`sendBotInfo`, `sendBotStatus`, `sendBotState`, `sendScreenshot`) to one-line delegations
+- Files changed:
+  - `src/main/grid-manager.ts` — added `sendToBotView`, simplified 4 public send methods
+- **Learnings for future iterations:**
+  - The four public send methods retain their typed signatures (preserving caller ergonomics) while delegating to a single untyped private helper
+  - `grid-manager.test.ts` has 7 tests that cover layout computation and view creation; the send methods are exercised via integration with `bot-runner.ts`
+  - Pre-existing test failures in `state-machine.test.ts` (2 tests) remain unrelated to this sprint
+---
+
+## 2026-03-21 - US-005
+- Created `src/main/screencast.ts` with three exported helpers: `startScreencast`, `restartScreencast`, `stopScreencast`
+- Refactored all CDP screencast logic in `bot-runner.ts` to use the new helpers
+- Zero direct `Page.startScreencast` / `Page.stopScreencast` / `Page.screencastFrameAck` calls remain in bot-runner.ts
+- Files changed:
+  - `src/main/screencast.ts` — NEW: shared CDP screencast utilities
+  - `src/main/bot-runner.ts` — imported helpers, replaced all inline CDP screencast calls
+- **Learnings for future iterations:**
+  - CDP screencasts have three lifecycle patterns: initial start (listener + start), restart (stop + start without detach, for resize), and teardown (stop + detach)
+  - `restartScreencast` must NOT detach the CDP session — the existing frame listener remains active from `startScreencast`
+  - Focus window resize debounce (200ms timer) and viewport sync is separate from screencast logic — kept in bot-runner.ts
+  - `void stopScreencast(cdp)` is used for fire-and-forget teardown in sync handlers (close events, stopAll)
+---
+
+## 2026-03-21 - US-006
+- Replaced six individual `mainWindow.on(event, ...)` calls with a single `for...of` loop over event names
+- Files changed:
+  - `src/main/index.ts` — replaced 18 lines with 3-line loop
+- **Learnings for future iterations:**
+  - Electron `BrowserWindow.on()` has per-event TypeScript overloads — a union of event names won't match any single overload, so cast to a specific event (e.g., `as 'resize'`) when iterating
+  - All six events (`resize`, `maximize`, `unmaximize`, `restore`, `enter-full-screen`, `leave-full-screen`) share identical handler logic, making this a safe DRY refactor
+  - Manual verification needed: window resize/maximize/fullscreen should still trigger grid refresh
+---
+
+## 2026-03-21 - US-007
+- Created `src/main/dropout-simulator.ts` with `DropoutSimulator` class encapsulating all dropout logic
+- Extracted from `index.ts`: `dropoutTimers` Map, `clearDropoutTimers()`, `clampDropoutRate()`, `sampleDropoutBotIds()`, and the inline dropout scheduling logic from `launchBots()`
+- `DropoutSimulator` exposes two methods: `scheduleDropouts(bots, config, forceFinish, getBotFn)` and `clearAll()`
+- All 5 `clearDropoutTimers()` call sites replaced with `dropoutSimulator.clearAll()`
+- `clampDropoutRate` in `handleStartRequest` removed — `normalizeStartPayload` already validates the range, and the simulator clamps internally
+- Files changed:
+  - `src/main/dropout-simulator.ts` — NEW: DropoutSimulator class with TSDoc
+  - `src/main/index.ts` — removed 4 functions + global Map, instantiate DropoutSimulator, delegate all dropout logic
+- **Learnings for future iterations:**
+  - The `forceFinishBot` callback and `registry.getBot` lookup are passed as parameters to avoid coupling DropoutSimulator to BotRunner/SessionRegistry
+  - `normalizeStartPayload` already validates dropout percentage is 0-100, so explicit clamping at the call site was redundant (the simulator still clamps defensively)
+  - Dropout timers fire after all bots are launched (moved from per-bot launch loop to post-launch), which is cleaner but means timers start slightly later than before
+  - Manual verification needed: dropout simulation still works with dropoutRatePercent > 0
+---
+
+## 2026-03-21 - US-008
+- Consolidated all IPC handler registrations into `ipc-handlers.ts`
+- Moved 4 handlers from `index.ts` to `ipc-handlers.ts`: CMD_OPEN_DRAWER, CMD_DRAWER_TOGGLE, CMD_OPEN_OVERVIEW, CMD_OVERVIEW_TOGGLE
+- Added `UiHandlerDeps` interface for drawer/overview callbacks (dependency inversion)
+- Updated `removeIpcHandlers()` to clean all 11 registered channels (added SCREENSHOT_DIAG and CMD_OPEN_OVERVIEW that were previously missed)
+- Removed `ipcMain` from `index.ts` imports — no longer needed there
+- Removed redundant manual cleanup in `window-all-closed` handler
+- Files changed:
+  - `src/main/ipc-handlers.ts` — added UiHandlerDeps interface, 4 new handlers, expanded removeIpcHandlers
+  - `src/main/index.ts` — removed 4 inline handlers, removed ipcMain import, simplified window-all-closed cleanup
+  - `test/unit/ipc-handlers.test.ts` — added tests for 4 new handlers, updated handler/listener counts
+- **Learnings for future iterations:**
+  - `removeIpcHandlers()` was not cleaning up SCREENSHOT_DIAG or CMD_OPEN_OVERVIEW — always verify cleanup matches registration
+  - CMD_OPEN_DRAWER just forwards to mainWindow (simple proxy), while CMD_DRAWER_TOGGLE/CMD_OVERVIEW_TOGGLE involve grid logic — the latter are best passed as callbacks to avoid coupling ipc-handlers to GridManager
+  - Manual verification needed: drawer toggle and overview window still work
+---
+
+## 2026-03-21 - US-009
+- Created `src/main/bot-session.ts` with `BotSession` class encapsulating per-bot lifecycle resources
+- Refactored `BotRunner` to use `Map<string, BotSession>` instead of 3 separate Maps (`runners`, `gridScreencasts`, `focusSessions`)
+- `stopAll()` simplified from 3 separate cleanup loops to a single `session.cleanup()` iteration
+- Removed `FocusSession` and `GridScreencast` interfaces from bot-runner.ts (internalized in BotSession)
+- Removed `stopGridScreencast` and `sendToFocus` private methods from BotRunner (delegated to BotSession)
+- Files changed:
+  - `src/main/bot-session.ts` — NEW: BotSession class with TSDoc'd API
+  - `src/main/bot-runner.ts` — replaced 3 Maps with sessions Map, delegated lifecycle ops to BotSession
+- **Learnings for future iterations:**
+  - BotSession is a resource container, not a behavior owner — FSM callback wiring stays in BotRunner because it needs registry/IPC/grid references
+  - `getOrCreateSession()` pattern ensures sessions exist before both `startFSM` and `openFocusWindow` (which can be called independently)
+  - `cleanup()` must stop grid screencast, FSM runner, AND focus window screencast — three distinct CDP teardown paths
+  - The `CDPSession` import from puppeteer is no longer needed in bot-runner.ts after removing the internal interfaces (types are inferred from `createCDPSession()`)
+  - Manual verification needed: full run with grid screencasts + focus windows + pause/resume works
 ---
