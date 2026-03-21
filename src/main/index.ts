@@ -15,6 +15,7 @@ import { BotRunner } from './bot-runner';
 import { registerIpcHandlers, removeIpcHandlers, StartPayload, StrategyPayload } from './ipc-handlers';
 import { createChildLogger, setVerbose, getLogPath } from './logger';
 import { createAutoPlayer } from '../scripts/auto-player';
+import { DropoutSimulator } from './dropout-simulator';
 
 const log = createChildLogger('main');
 
@@ -50,7 +51,7 @@ let repeatTotalRounds = 1;
 let lastRunConfig: AppConfig | null = null;
 let isRepeating = false;
 let budgetWatchdogTimer: ReturnType<typeof setInterval> | null = null;
-let dropoutTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+const dropoutSimulator = new DropoutSimulator();
 
 interface OverviewSnapshot {
   timestamp: number;
@@ -182,33 +183,6 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
   };
 }
 
-function clearDropoutTimers(): void {
-  for (const timer of dropoutTimers.values()) {
-    clearTimeout(timer);
-  }
-  dropoutTimers.clear();
-}
-
-function clampDropoutRate(percent: number | undefined): number {
-  const value = percent == null ? DEFAULTS.dropoutRatePercent : Number(percent);
-  if (!Number.isFinite(value)) return DEFAULTS.dropoutRatePercent;
-  return Math.max(0, Math.min(100, value));
-}
-
-function sampleDropoutBotIds(allBotIds: string[], count: number): Set<string> {
-  if (count <= 0 || allBotIds.length === 0) {
-    return new Set<string>();
-  }
-
-  const ids = [...allBotIds];
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-  }
-
-  return new Set(ids.slice(0, Math.min(count, ids.length)));
-}
-
 function randomToken(length = 8): string {
   const token = Math.random().toString(36).slice(2);
   if (token.length >= length) return token.slice(0, length);
@@ -256,18 +230,17 @@ function buildBotNavigationUrl(
  * Launch bots for a validated run config.
  */
 async function launchBots(config: AppConfig): Promise<void> {
-  clearDropoutTimers();
+  dropoutSimulator.clearAll();
   currentPlayerCount = config.playerCount;
   const runContext = {
     runTs: String(Date.now()),
     runRand: randomToken(8),
   };
-  const dropoutRatePercent = clampDropoutRate(config.dropoutRatePercent);
 
   log.info('Starting run', {
     url: config.url,
     players: config.playerCount,
-    dropoutRatePercent,
+    dropoutRatePercent: config.dropoutRatePercent,
     strategy: config.strategy.name,
     cols: config.cols ?? 'auto',
     delay: config.delayMultiplier,
@@ -290,24 +263,6 @@ async function launchBots(config: AppConfig): Promise<void> {
     }),
   );
 
-  const dropoutCount = Math.min(
-    bots.length,
-    Math.round((dropoutRatePercent / 100) * bots.length),
-  );
-  const dropoutBotIds = sampleDropoutBotIds(
-    bots.map((bot) => bot.id),
-    dropoutCount,
-  );
-
-  if (dropoutBotIds.size > 0) {
-    log.info(
-      'Dropout simulation armed: %s%% => %d/%d bots',
-      dropoutRatePercent,
-      dropoutBotIds.size,
-      bots.length,
-    );
-  }
-
   // Launch all bots concurrently — each gets its own browser + page
   const launchPromises = bots.map(async (bot) => {
     log.info('Launching bot #%d (%s)', bot.index, bot.id);
@@ -317,58 +272,6 @@ async function launchBots(config: AppConfig): Promise<void> {
       await botRunner.launchBrowser(bot);
       await botRunner.navigate(bot, navigationUrl);
       await botRunner.startFSM(bot, config.strategy.actionDelayMs ?? 0, config.strategy.actionJitterMs ?? 0, config.strategy);
-
-      if (dropoutBotIds.has(bot.id)) {
-        // Compute a dropout window that scales with bot speed settings so
-        // dropouts are spread realistically across the run instead of all
-        // firing in the first few seconds.
-        //
-        // effectiveRuntimeMs estimates how long a slow run might take based
-        // on the per-action delay and the global delay multiplier.  We use
-        // 80 % of the runtime budget as the upper bound so the dropout
-        // always fires before the watchdog kills the bot.
-        const actionDelay = config.strategy.actionDelayMs ?? 0;
-        const multiplier = config.delayMultiplier ?? 1.0;
-        const estimatedRunMs = Math.max(
-          30_000,                                          // at least 30 s
-          DEFAULTS.botMaxRuntimeMs * 0.8,                  // 80 % of budget
-          actionDelay * multiplier * 200,                  // ~200 actions worth
-        );
-        const minDelay = DEFAULTS.dropoutMinDelayMs;
-        const maxDelay = Math.min(
-          Math.max(minDelay, estimatedRunMs),
-          DEFAULTS.dropoutMaxDelayMs,
-        );
-        const delayMs = minDelay + Math.floor(Math.random() * (maxDelay - minDelay + 1));
-
-        const timer = setTimeout(() => {
-          dropoutTimers.delete(bot.id);
-          const currentBot = registry.getBot(bot.id);
-          if (!currentBot) return;
-          if (isTerminalStatus(currentBot.status)) return;
-
-          const delaySeconds = (delayMs / 1000).toFixed(1);
-          log.warn(
-            'Simulated dropout fired for bot #%d (%s) after %ss',
-            bot.index,
-            bot.id,
-            delaySeconds,
-          );
-          botRunner.forceFinishBot(
-            bot.id,
-            `simulated dropout after ${delaySeconds}s (${dropoutRatePercent}% per run)`,
-            'dropped',
-          );
-        }, delayMs);
-
-        dropoutTimers.set(bot.id, timer);
-        log.info(
-          'Scheduled simulated dropout for bot #%d (%s) in %dms',
-          bot.index,
-          bot.id,
-          delayMs,
-        );
-      }
     } catch (err) {
       log.error('Failed to start bot #%d: %s', bot.index, err instanceof Error ? err.message : String(err));
       registry.setError(bot.id, err instanceof Error ? err.message : String(err));
@@ -376,6 +279,14 @@ async function launchBots(config: AppConfig): Promise<void> {
   });
 
   await Promise.all(launchPromises);
+
+  // Schedule dropout timers after all bots are launched
+  dropoutSimulator.scheduleDropouts(
+    bots,
+    config,
+    (botId, reason, finalStatus) => botRunner.forceFinishBot(botId, reason, finalStatus),
+    (id) => registry.getBot(id),
+  );
 
   log.info('All %d bots launched', config.playerCount);
 }
@@ -418,7 +329,7 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
       url: start.url,
       urlInjection: start.urlInjection,
       playerCount: start.playerCount,
-      dropoutRatePercent: clampDropoutRate(start.dropoutRatePercent ?? baseConfig.dropoutRatePercent),
+      dropoutRatePercent: start.dropoutRatePercent ?? baseConfig.dropoutRatePercent,
       strategy,
     };
 
@@ -465,7 +376,7 @@ async function handleRepeatRound(): Promise<void> {
   log.info('Round %d/%d complete — starting next round…', repeatCurrentRound, repeatTotalRounds);
 
   // Tear down current round
-  clearDropoutTimers();
+  dropoutSimulator.clearAll();
   await botRunner.stopAll();
   currentPlayerCount = 0;
 
@@ -508,7 +419,7 @@ async function handleRestartRequest(): Promise<void> {
 
   runStarting = true;
   try {
-    clearDropoutTimers();
+    dropoutSimulator.clearAll();
     await botRunner.stopAll();
     currentPlayerCount = 0;
     runStarted = false;
@@ -684,7 +595,7 @@ app.whenReady().then(async () => {
     // Guard with isRepeating to prevent re-entrant calls: stopAll() triggers
     // onStatusChange → allFinished() → allDoneCallback, which would recurse.
     botRunner.setAllDoneCallback(() => {
-      clearDropoutTimers();
+      dropoutSimulator.clearAll();
       if (!isRepeating && repeatCurrentRound < repeatTotalRounds) {
         isRepeating = true;
         void handleRepeatRound()
@@ -750,7 +661,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   stopBudgetWatchdog();
-  clearDropoutTimers();
+  dropoutSimulator.clearAll();
   removeIpcHandlers();
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
   ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
@@ -764,7 +675,7 @@ app.on('window-all-closed', async () => {
 
 app.on('before-quit', async () => {
   stopBudgetWatchdog();
-  clearDropoutTimers();
+  dropoutSimulator.clearAll();
   stopOverviewTicker();
   if (overviewWindow && !overviewWindow.isDestroyed()) {
     overviewWindow.close();
