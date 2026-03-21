@@ -1,0 +1,141 @@
+{
+  "project": "oBots",
+  "branchName": "ralph/code-quality-deep-pass",
+  "description": "Improve code quality: TSDoc coverage, DRY fixes, factory patterns, separation of concerns",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add TSDoc to all undocumented exported symbols",
+      "description": "19 exported symbols lack TSDoc. Add documentation following existing style conventions.",
+      "acceptanceCriteria": [
+        "Every exported function, class, interface, type, and constant has a /** */ TSDoc comment",
+        "TSDoc follows existing style (no @param/@returns unless complex)",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes (no behavioral change)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Files: src/engine/types.ts (8 symbols: STRATEGY_PRESETS ~263, DEFAULT_STRATEGY ~341, DEFAULTS ~367, NumberStrategy/SelectStrategy/RadioStrategy/CheckboxStrategy ~211-225, AppConfig ~343), src/engine/actions.ts (buildSelector ~24), src/engine/message-bank.ts (MessageCategory, MESSAGE_CATEGORIES, MESSAGE_CATEGORY_LABELS, MESSAGE_BANK), src/main/ipc-handlers.ts (StrategyPayload ~16, StartPayload ~30, removeIpcHandlers ~107), src/renderer/bot-card.ts (BotCardData ~7), src/renderer/toolbar.ts (ToolbarCallbacks ~6), src/scripts/poc-bot.ts (POC_BOT). Style reference: src/main/logger.ts:85-115, src/main/screenshot-diag.ts:71-195. NOTE: bot-card.ts and toolbar.ts are currently at src/renderer/components/ — use that path, US-002 moves them later."
+    },
+    {
+      "id": "US-002",
+      "title": "Flatten renderer directory and extract shared escapeHtml",
+      "description": "Move bot-card.ts and toolbar.ts out of components/ subfolder to src/renderer/ level. Extract duplicate escapeHtml into shared utils.ts.",
+      "acceptanceCriteria": [
+        "No components/ subdirectory exists under src/renderer/",
+        "bot-card.ts and toolbar.ts live at src/renderer/ level",
+        "Single escapeHtml definition in src/renderer/utils.ts",
+        "Zero function escapeHtml definitions in renderer.ts or bot-card.ts",
+        "All imports use ./ (no ../ in renderer TS files)",
+        "npx tsc --noEmit passes",
+        "npm run build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "1) git mv src/renderer/components/bot-card.ts src/renderer/bot-card.ts and same for toolbar.ts. 2) Create src/renderer/utils.ts with escapeHtml from renderer.ts:~655 (the version that handles ' → &#39;). 3) Update renderer.ts imports: './components/bot-card' → './bot-card', './components/toolbar' → './toolbar', add import { escapeHtml } from './utils'. 4) Delete local escapeHtml from bot-card.ts:~87, add import from './utils'. 5) rmdir src/renderer/components/."
+    },
+    {
+      "id": "US-003",
+      "title": "Export isTerminalStatus from types.ts",
+      "description": "The terminal-status check pattern is repeated in bot-runner.ts and renderer.ts. Centralize next to the BotStatus type definition.",
+      "acceptanceCriteria": [
+        "isTerminalStatus exported from types.ts",
+        "Zero inline terminal-status checks remain in bot-runner.ts or renderer.ts",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "1) Add after BotStatus type in src/engine/types.ts: export function isTerminalStatus(status: BotStatus): boolean { return status === 'done' || status === 'dropped' || status === 'error'; }. 2) bot-runner.ts:~54 — delete private isTerminalStatus method, replace all this.isTerminalStatus(...) with imported function. 3) renderer.ts:~419 — replace inline (status === 'done' || status === 'dropped' || status === 'error') with isTerminalStatus(status), extend existing import from '../engine/types'. 4) grep for all other occurrences in src/ to catch any missed."
+    },
+    {
+      "id": "US-004",
+      "title": "DRY up GridManager BotView send methods",
+      "description": "Four methods in grid-manager.ts (sendBotInfo, sendBotStatus, sendBotState, sendScreenshot) share identical get-check-send logic.",
+      "acceptanceCriteria": [
+        "Single sendToBotView private method contains the get-check-send logic",
+        "Four public send methods are one-line delegations",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Add private sendToBotView(botId: string, channel: IpcChannel, data: unknown): void in src/main/grid-manager.ts. Pattern: const bv = this.botViews.get(botId); if (bv && !bv.view.webContents.isDestroyed()) bv.view.webContents.send(channel, data). Then simplify sendBotInfo/sendBotStatus/sendBotState/sendScreenshot (~157-197) to one-line calls. Public API unchanged — callers in bot-runner.ts unaffected."
+    },
+    {
+      "id": "US-005",
+      "title": "Extract CDP screencast utilities to screencast.ts",
+      "description": "CDP screencast start/stop/frame-ack logic is duplicated 2-3x in bot-runner.ts. Extract to a shared module.",
+      "acceptanceCriteria": [
+        "src/main/screencast.ts exists with TSDoc'd exports",
+        "Zero direct Page.startScreencast / Page.stopScreencast / Page.screencastFrameAck calls remain in bot-runner.ts",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes",
+        "Manual: grid screencasts and focus windows still display live frames"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Create src/main/screencast.ts. Export: startScreencast(cdp, opts: {quality, maxWidth, maxHeight, everyNthFrame}, onFrame: (dataUrl) => void): Promise<void> — handles Page.screencastFrame listener, FrameAck, and Page.startScreencast call. Export: stopScreencast(cdp): Promise<void> — calls Page.stopScreencast then cdp.detach(), both with .catch(() => {}). CDPSession type from puppeteer as type-only import. Refactor bot-runner.ts: startGridScreencast (~462-526), openFocusWindow (~366-390), stopGridScreencast (~517), stopAll teardown (~427-445) to use these helpers."
+    },
+    {
+      "id": "US-006",
+      "title": "DRY up resize event bindings in index.ts",
+      "description": "Six near-identical mainWindow.on(event, () => scheduleGridRefresh(event)) calls. Replace with a loop.",
+      "acceptanceCriteria": [
+        "Single loop replaces six individual event bindings",
+        "npx tsc --noEmit passes",
+        "Manual: window resize/maximize/fullscreen still triggers grid refresh"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "src/main/index.ts lines ~735-752. Replace six .on() calls with: for (const event of ['resize', 'maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen'] as const) { mainWindow.on(event, () => scheduleGridRefresh(event)); }"
+    },
+    {
+      "id": "US-007",
+      "title": "Extract dropout simulation from index.ts to dropout-simulator.ts",
+      "description": "~120 lines of dropout probability math mixed into the orchestrator. Extract to its own module with a clean class API.",
+      "acceptanceCriteria": [
+        "Zero dropout-related functions remain in index.ts",
+        "DropoutSimulator class in its own file with TSDoc",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes",
+        "Manual: dropout simulation still works with dropoutRatePercent > 0"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Create src/main/dropout-simulator.ts. Move from index.ts: sampleDropoutBotIds (~185-210), scheduleDropouts (~321-371), clearDropoutTimers (~185-190), dropoutTimers Map (~53), and any clampDropoutRate helper. Export class DropoutSimulator { scheduleDropouts(bots, config, forceFinish callback): void; clearAll(): void }. Depends on DEFAULTS and BotInstance from types.ts. Pass botRunner.forceFinishBot as callback to avoid coupling. Follow session-registry.ts pattern. In index.ts: instantiate alongside other managers, call dropoutSimulator.scheduleDropouts(...) in handleStartRequest/launchBots."
+    },
+    {
+      "id": "US-008",
+      "title": "Consolidate IPC handler registration into ipc-handlers.ts",
+      "description": "IPC handlers split between ipc-handlers.ts (5 channels) and index.ts (4 more: CMD_OPEN_DRAWER, CMD_DRAWER_TOGGLE, CMD_OPEN_OVERVIEW, CMD_OVERVIEW_TOGGLE). Consolidate into one registry.",
+      "acceptanceCriteria": [
+        "Zero ipcMain.on(IpcChannel.CMD_*) calls remain in index.ts",
+        "All IPC channel registrations live in ipc-handlers.ts",
+        "removeIpcHandlers() cleans up every registered channel",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes (ipc-handlers tests updated if needed)",
+        "Manual: drawer toggle and overview window still work"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Expand registerIpcHandlers() deps param to accept mainWindow and openOverviewWindow callback. Move 4 handlers from index.ts:~705-733 (CMD_OPEN_DRAWER, CMD_DRAWER_TOGGLE, CMD_OPEN_OVERVIEW, CMD_OVERVIEW_TOGGLE) into ipc-handlers.ts. Update removeIpcHandlers() to clean all channels. Update index.ts registerIpcHandlers() call to pass new deps. Follow existing handler pattern in ipc-handlers.ts."
+    },
+    {
+      "id": "US-009",
+      "title": "Introduce BotSession to encapsulate per-bot lifecycle",
+      "description": "BotRunner manages 3 separate Maps (runners, gridScreencasts, focusSessions) with implicit coordination. Encapsulate each bot's lifecycle resources in a BotSession class that references bots by ID.",
+      "acceptanceCriteria": [
+        "BotSession class exists with TSDoc'd public API",
+        "BotRunner uses Map<string, BotSession> instead of 3 separate Maps",
+        "stopAll() is a simple iteration calling session.cleanup()",
+        "npx tsc --noEmit passes",
+        "npx vitest run passes",
+        "Manual: full run with grid screencasts + focus windows + pause/resume works"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Create src/main/bot-session.ts. BotSession references bots by ID only (SessionRegistry remains sole source of truth for bot state). BotSession owns lifecycle: runner (StateMachineRunner), gridCdp (CDPSession), focusSession ({win, cdp}). Methods: startFSM, startGridScreencast, stopGridScreencast, openFocusWindow, closeFocusWindow, pauseFSM, resumeFSM, forceFinish, cleanup. Import startScreencast/stopScreencast from ./screencast (US-005). FSM callbacks wiring stays in BotRunner (~174-227) since it needs registry/IPC/grid — BotSession receives constructed callbacks. In bot-runner.ts: replace 3 Maps with Map<string, BotSession>, delegate methods, simplify stopAll()."
+    }
+  ]
+}

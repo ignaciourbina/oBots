@@ -1,0 +1,42 @@
+# Ralph Progress Log
+Started: 2026-03-21
+Sprint: Code Quality Deep Pass
+
+## Codebase Patterns
+- TSDoc style: use simple `/** Single-line description */` for straightforward symbols; multi-line with `@param`/`@returns` only for complex functions (see `src/main/logger.ts:96-108` for reference)
+- 7 of the 19 originally-listed symbols already had TSDoc at sprint start (STRATEGY_PRESETS, NumberStrategy, SelectStrategy, RadioStrategy, CheckboxStrategy, buildSelector, removeIpcHandlers)
+- `buildSelector` in `actions.ts` is a private function despite being listed in the PRD as exported — it is NOT exported
+- Pre-existing test failures in `test/unit/state-machine.test.ts` (2 tests in stale/drop probability suite) — not related to TSDoc changes
+- bot-card.ts and toolbar.ts live at `src/renderer/` (moved from `components/` in US-002)
+- Shared renderer utilities go in `src/renderer/utils.ts` (escapeHtml lives there)
+
+## 2026-03-21 - US-001
+- Added TSDoc comments to 12 undocumented exported symbols (7 of 19 already had TSDoc)
+- Files changed:
+  - `src/engine/types.ts` — DEFAULT_STRATEGY, AppConfig, DEFAULTS
+  - `src/engine/message-bank.ts` — MessageCategory, MESSAGE_CATEGORIES, MESSAGE_CATEGORY_LABELS, MESSAGE_BANK
+  - `src/main/ipc-handlers.ts` — StrategyPayload, StartPayload
+  - `src/renderer/components/bot-card.ts` — BotCardData
+  - `src/renderer/components/toolbar.ts` — ToolbarCallbacks
+  - `src/scripts/poc-bot.ts` — POC_BOT
+- **Learnings for future iterations:**
+  - Several symbols the PRD listed as undocumented already had TSDoc — always verify current state before editing
+  - `buildSelector` is a module-private function, not exported — PRD notes can be slightly inaccurate on export status
+  - 2 pre-existing test failures in `state-machine.test.ts` (stale/drop probability suite) — unrelated to this sprint's work
+---
+
+## 2026-03-21 - US-002
+- Flattened renderer directory: moved `bot-card.ts` and `toolbar.ts` from `src/renderer/components/` to `src/renderer/`
+- Extracted shared `escapeHtml` into `src/renderer/utils.ts` (renderer.ts version with `'` → `&#39;` support)
+- Removed duplicate `escapeHtml` from `renderer.ts` and `bot-card.ts`, both now import from `./utils`
+- Removed empty `components/` directory
+- Files changed:
+  - `src/renderer/utils.ts` — NEW: shared escapeHtml
+  - `src/renderer/bot-card.ts` — moved from components/, removed local escapeHtml, added import
+  - `src/renderer/toolbar.ts` — moved from components/, updated path comment
+  - `src/renderer/renderer.ts` — removed local escapeHtml, added import from utils
+- **Learnings for future iterations:**
+  - renderer.ts does not import from bot-card.ts or toolbar.ts — they are independent entry points for different renderer contexts
+  - `focus.html` also has an inline JS `escapeHtml` — not covered by this story since it's in a separate HTML file, not a TS module
+  - `git mv` correctly stages renames; just need to `rmdir` the empty directory afterward
+---

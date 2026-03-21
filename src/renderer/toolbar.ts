@@ -1,4 +1,4 @@
-// src/renderer/components/toolbar.ts
+// src/renderer/toolbar.ts
 // ──────────────────────────────────────────────────────────────
 // Toolbar component — top bar with controls and status display.
 // ──────────────────────────────────────────────────────────────

@@ -1,8 +1,10 @@
-// src/renderer/components/bot-card.ts
+// src/renderer/bot-card.ts
 // ──────────────────────────────────────────────────────────────
 // Bot Card component — encapsulates creation and update logic
 // for a single bot tile in the grid.
 // ──────────────────────────────────────────────────────────────
+
+import { escapeHtml } from './utils';
 
 /** Data required to create or update a bot card tile in the grid. */
 export interface BotCardData {
@@ -83,13 +85,4 @@ export function updateBotCardScreenshot(card: HTMLElement, dataUrl: string): voi
   if (placeholder) {
     placeholder.style.display = 'none';
   }
-}
-
-/** Minimal HTML escaping for user-provided strings. */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

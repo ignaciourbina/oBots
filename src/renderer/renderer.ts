@@ -5,6 +5,8 @@
 // preload-exposed `window.oBots` API.
 // ──────────────────────────────────────────────────────────────
 
+import { escapeHtml } from './utils';
+
 // Type declarations for the preload-exposed API
 interface OBotsApi {
   onStartFailed: (cb: (data: { message: string }) => void) => void;
@@ -650,12 +652,6 @@ function appendLogEntryDOM(entry: DrawerLogEntry): void {
 
   // Auto-scroll to bottom
   logDrawerBody.scrollTop = logDrawerBody.scrollHeight;
-}
-
-/** Escape HTML entities in log messages */
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  return text.replace(/[&<>"']/g, (c) => map[c] || c);
 }
 
 function updateOverviewButton(): void {
