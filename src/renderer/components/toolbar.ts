@@ -3,6 +3,7 @@
 // Toolbar component — top bar with controls and status display.
 // ──────────────────────────────────────────────────────────────
 
+/** Callback hooks for toolbar button actions. */
 export interface ToolbarCallbacks {
   onStop: () => void;
 }

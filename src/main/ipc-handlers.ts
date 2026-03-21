@@ -13,6 +13,7 @@ import type { UrlInjectionConfig } from '../engine/types';
 
 const log = createChildLogger('ipc');
 
+/** Strategy configuration payload sent from the renderer start form. */
 export interface StrategyPayload {
   name: string;
   numberStrategy: string;
@@ -30,6 +31,7 @@ export interface StrategyPayload {
   messageBankCategories?: string[];
 }
 
+/** Payload for the CMD_START IPC message from the renderer. */
 export interface StartPayload {
   url: string;
   urlInjection?: UrlInjectionConfig;

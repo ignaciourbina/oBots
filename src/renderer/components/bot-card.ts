@@ -4,6 +4,7 @@
 // for a single bot tile in the grid.
 // ──────────────────────────────────────────────────────────────
 
+/** Data required to create or update a bot card tile in the grid. */
 export interface BotCardData {
   index: number;
   botId: string;

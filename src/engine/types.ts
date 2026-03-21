@@ -338,10 +338,12 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
   },
 };
 
+/** Default bot strategy — uses the 'random' preset. */
 export const DEFAULT_STRATEGY: BotStrategy = STRATEGY_PRESETS.random;
 
 // ── Configuration ───────────────────────────────────────────
 
+/** Top-level application configuration for a bot run. */
 export interface AppConfig {
   url: string;
   urlInjection?: UrlInjectionConfig;
@@ -364,6 +366,7 @@ export interface UrlInjectionConfig {
   projectIdTemplate: string;
 }
 
+/** Sensible default values for timing, viewport, and resource budgets. */
 export const DEFAULTS = {
   playerCount: 2,
   dropoutRatePercent: 0,
@@ -374,10 +377,8 @@ export const DEFAULTS = {
   // If a bot keeps running beyond this budget, watchdog force-drops it so
   // repeat rounds can continue instead of waiting indefinitely.
   botMaxRuntimeMs: 300_000,
-  // If state does not actually change for this long while status=running,
-  // watchdog force-drops the bot.
-  botStateStaleTimeoutMs: 60_000,
-  botStateStaleCheckIntervalMs: 5_000,
+  // How often (ms) the runtime-budget watchdog checks for overdue bots.
+  budgetCheckIntervalMs: 15_000,
   // How often (ms) the stale/drop dice are rolled per bot.
   // Rolling once every 30 s means the probability is per 30-second interval,
   // not per page visit or state change.

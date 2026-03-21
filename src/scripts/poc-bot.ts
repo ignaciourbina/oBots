@@ -16,6 +16,7 @@
 
 import { BotScript } from '../engine/types';
 
+/** Generic auto-player bot script that handles most standard experiment apps. */
 const POC_BOT: BotScript = {
   name: 'PoC Simple Clicker',
   initialState: 'navigate',

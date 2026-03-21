@@ -4,8 +4,10 @@
 // and textarea fields. Pure data module — zero dependencies.
 // ──────────────────────────────────────────────────────────────
 
+/** Available message tone categories for the message bank. */
 export type MessageCategory = 'cooperative' | 'competitive' | 'neutral' | 'conditional' | 'blank';
 
+/** Ordered list of all available message categories. */
 export const MESSAGE_CATEGORIES: readonly MessageCategory[] = [
   'cooperative',
   'competitive',
@@ -14,6 +16,7 @@ export const MESSAGE_CATEGORIES: readonly MessageCategory[] = [
   'blank',
 ] as const;
 
+/** Human-readable labels for each message category. */
 export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
   cooperative: 'Cooperative',
   competitive: 'Competitive / Self-interested',
@@ -22,6 +25,7 @@ export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
   blank: 'Blank / Minimal',
 };
 
+/** Pre-written messages grouped by category for free-form text fields. */
 export const MESSAGE_BANK: Record<MessageCategory, readonly string[]> = {
   cooperative: [
     'I want us both to do well.',
