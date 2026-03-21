@@ -11,6 +11,7 @@ import {
   BotStatus,
   BotStrategy,
   DEFAULTS,
+  isTerminalStatus,
   LogEntry,
   Transition,
 } from './types';
@@ -87,7 +88,7 @@ export class StateMachineRunner {
 
   /** Stop the FSM permanently (idempotent — no-op if already finished). */
   stop(finalStatus: 'done' | 'dropped' = 'done'): void {
-    if (this._status === 'done' || this._status === 'dropped' || this._status === 'error') return;
+    if (isTerminalStatus(this._status)) return;
     this._status = finalStatus;
     this.callbacks.onStatusChange(this.botId, finalStatus);
   }

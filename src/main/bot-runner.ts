@@ -14,6 +14,7 @@ import {
   BotStrategy,
   DEFAULTS,
   IpcChannel,
+  isTerminalStatus,
   LogEntry,
 } from '../engine/types';
 import { StateMachineRunner, FSMCallbacks } from '../engine/state-machine';
@@ -51,9 +52,6 @@ export class BotRunner {
   private readonly syslog = createChildLogger('bot-runner');
   private gridManager: GridManager | null = null;
   private allDoneCallback: (() => void) | null = null;
-  private isTerminalStatus(status: BotStatus): boolean {
-    return status === 'done' || status === 'dropped' || status === 'error';
-  }
 
   constructor(
     private readonly win: BrowserWindow,
@@ -210,7 +208,7 @@ export class BotRunner {
         this.sendToFocus(botId, IpcChannel.FOCUS_BOT_STATUS, status);
 
         // Stop grid screencast when bot finishes
-        if (this.isTerminalStatus(status)) {
+        if (isTerminalStatus(status)) {
           this.stopGridScreencast(botId);
         }
 
@@ -276,7 +274,7 @@ export class BotRunner {
       return false;
     }
 
-    if (this.isTerminalStatus(bot.status)) {
+    if (isTerminalStatus(bot.status)) {
       return false;
     }
 

@@ -6,6 +6,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import { escapeHtml } from './utils';
+import { isTerminalStatus, type BotStatus } from '../engine/types';
 
 // Type declarations for the preload-exposed API
 interface OBotsApi {
@@ -419,10 +420,8 @@ function updateBotStatus(id: string, status: string, realIndex?: number): void {
 
   // Track finished count
   if (
-    (status === 'done' || status === 'dropped' || status === 'error')
-    && oldStatus !== 'done'
-    && oldStatus !== 'dropped'
-    && oldStatus !== 'error'
+    isTerminalStatus(status as BotStatus)
+    && !isTerminalStatus(oldStatus as BotStatus)
   ) {
     finishedCount++;
   }

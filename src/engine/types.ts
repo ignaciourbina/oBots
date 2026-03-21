@@ -108,6 +108,11 @@ export interface BotConfig {
 
 export type BotStatus = 'idle' | 'running' | 'paused' | 'stale' | 'dropped' | 'done' | 'error';
 
+/** Returns true if the status represents a terminal (finished) bot lifecycle state. */
+export function isTerminalStatus(status: BotStatus): boolean {
+  return status === 'done' || status === 'dropped' || status === 'error';
+}
+
 export interface LogEntry {
   timestamp: number;
   level: 'info' | 'warn' | 'error';

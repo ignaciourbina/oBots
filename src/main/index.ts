@@ -6,7 +6,7 @@
 
 import path from 'path';
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { AppConfig, BotScript, DEFAULT_STRATEGY, DEFAULTS, BotStrategy, IpcChannel, UrlInjectionConfig } from '../engine/types';
+import { AppConfig, BotScript, DEFAULT_STRATEGY, DEFAULTS, BotStrategy, IpcChannel, isTerminalStatus, UrlInjectionConfig } from '../engine/types';
 import type { MessageCategory } from '../engine/message-bank';
 import { parseCLI } from './cli';
 import { GridManager } from './grid-manager';
@@ -49,7 +49,7 @@ let repeatCurrentRound = 0;
 let repeatTotalRounds = 1;
 let lastRunConfig: AppConfig | null = null;
 let isRepeating = false;
-let staleBotTimer: ReturnType<typeof setInterval> | null = null;
+let budgetWatchdogTimer: ReturnType<typeof setInterval> | null = null;
 let dropoutTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
 interface OverviewSnapshot {
@@ -345,7 +345,7 @@ async function launchBots(config: AppConfig): Promise<void> {
           dropoutTimers.delete(bot.id);
           const currentBot = registry.getBot(bot.id);
           if (!currentBot) return;
-          if (currentBot.status === 'done' || currentBot.status === 'dropped' || currentBot.status === 'error') return;
+          if (isTerminalStatus(currentBot.status)) return;
 
           const delaySeconds = (delayMs / 1000).toFixed(1);
           log.warn(
@@ -524,38 +524,14 @@ async function handleRestartRequest(): Promise<void> {
   }
 }
 
-function checkForStaleBots(): void {
+function checkRuntimeBudget(): void {
   if (!runStarted || runStarting || currentPlayerCount <= 0) {
     return;
   }
 
   const now = Date.now();
-  const handled = new Set<string>();
-
-  const staleBots = registry.getStaleRunningBots(DEFAULTS.botStateStaleTimeoutMs, now);
-  for (const bot of staleBots) {
-    handled.add(bot.id);
-    const staleForMs = now - bot.lastStateChangeAt;
-    const staleForSec = Math.round(staleForMs / 1000);
-    log.warn(
-      'Bot #%d (%s) stale in state "%s" for %ds; force-finishing',
-      bot.index,
-      bot.id,
-      bot.currentState,
-      staleForSec,
-    );
-    botRunner.forceFinishBot(
-      bot.id,
-      `no state change for ${staleForSec}s (timeout ${Math.round(DEFAULTS.botStateStaleTimeoutMs / 1000)}s)`,
-      'dropped',
-    );
-  }
-
   const overdueBots = registry.getOverdueRunningBots(DEFAULTS.botMaxRuntimeMs, now);
   for (const bot of overdueBots) {
-    if (handled.has(bot.id)) {
-      continue;
-    }
     const runtimeMs = now - bot.createdAt;
     const runtimeSec = Math.round(runtimeMs / 1000);
     log.warn(
@@ -572,19 +548,19 @@ function checkForStaleBots(): void {
   }
 }
 
-function startStaleBotWatcher(): void {
-  if (staleBotTimer) {
+function startBudgetWatchdog(): void {
+  if (budgetWatchdogTimer) {
     return;
   }
-  staleBotTimer = setInterval(checkForStaleBots, DEFAULTS.botStateStaleCheckIntervalMs);
+  budgetWatchdogTimer = setInterval(checkRuntimeBudget, DEFAULTS.budgetCheckIntervalMs);
 }
 
-function stopStaleBotWatcher(): void {
-  if (!staleBotTimer) {
+function stopBudgetWatchdog(): void {
+  if (!budgetWatchdogTimer) {
     return;
   }
-  clearInterval(staleBotTimer);
-  staleBotTimer = null;
+  clearInterval(budgetWatchdogTimer);
+  budgetWatchdogTimer = null;
 }
 
 function scheduleGridRefresh(reason: string): void {
@@ -614,9 +590,7 @@ function buildOverviewSnapshot(): OverviewSnapshot {
       error: bot.error,
     }));
 
-  const finishedBots = bots.filter((b) =>
-    b.status === 'done' || b.status === 'dropped' || b.status === 'error'
-  ).length;
+  const finishedBots = bots.filter((b) => isTerminalStatus(b.status)).length;
 
   return {
     timestamp: Date.now(),
@@ -704,7 +678,7 @@ app.whenReady().then(async () => {
     registry = new SessionRegistry();
     botRunner = new BotRunner(mainWindow, registry, baseConfig.delayMultiplier);
     botRunner.setGridManager(gridManager);
-    startStaleBotWatcher();
+    startBudgetWatchdog();
 
     // Wire repeat-round logic: when all bots finish, start next round if needed.
     // Guard with isRepeating to prevent re-entrant calls: stopAll() triggers
@@ -790,7 +764,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
-  stopStaleBotWatcher();
+  stopBudgetWatchdog();
   clearDropoutTimers();
   removeIpcHandlers();
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
@@ -804,7 +778,7 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('before-quit', async () => {
-  stopStaleBotWatcher();
+  stopBudgetWatchdog();
   clearDropoutTimers();
   stopOverviewTicker();
   if (overviewWindow && !overviewWindow.isDestroyed()) {
