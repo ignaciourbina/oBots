@@ -151,49 +151,37 @@ export class GridManager {
     return this.botViews.get(botId);
   }
 
-  /**
-   * Send bot identity info to its BrowserView once it's ready.
-   */
+  /** Send a message to a bot's BrowserView if it exists and is not destroyed. */
+  private sendToBotView(botId: string, channel: IpcChannel, data: unknown): void {
+    const bv = this.botViews.get(botId);
+    if (bv && !bv.view.webContents.isDestroyed()) {
+      bv.view.webContents.send(channel, data);
+    }
+  }
+
+  /** Send bot identity info to its BrowserView once it's ready. */
   sendBotInfo(botId: string, info: {
     id: string;
     index: number;
     status: string;
     currentState: string;
   }): void {
-    const bv = this.botViews.get(botId);
-    if (bv && !bv.view.webContents.isDestroyed()) {
-      bv.view.webContents.send(IpcChannel.BOTVIEW_INFO, info);
-    }
+    this.sendToBotView(botId, IpcChannel.BOTVIEW_INFO, info);
   }
 
-  /**
-   * Send a status update to a bot's BrowserView.
-   */
+  /** Send a status update to a bot's BrowserView. */
   sendBotStatus(botId: string, status: string): void {
-    const bv = this.botViews.get(botId);
-    if (bv && !bv.view.webContents.isDestroyed()) {
-      bv.view.webContents.send(IpcChannel.BOTVIEW_STATUS, status);
-    }
+    this.sendToBotView(botId, IpcChannel.BOTVIEW_STATUS, status);
   }
 
-  /**
-   * Send a state change to a bot's BrowserView.
-   */
+  /** Send a state change to a bot's BrowserView. */
   sendBotState(botId: string, state: string): void {
-    const bv = this.botViews.get(botId);
-    if (bv && !bv.view.webContents.isDestroyed()) {
-      bv.view.webContents.send(IpcChannel.BOTVIEW_STATE, state);
-    }
+    this.sendToBotView(botId, IpcChannel.BOTVIEW_STATE, state);
   }
 
-  /**
-   * Send a screencast frame to a bot's BrowserView.
-   */
+  /** Send a screencast frame to a bot's BrowserView. */
   sendScreenshot(botId: string, dataUrl: string): void {
-    const bv = this.botViews.get(botId);
-    if (bv && !bv.view.webContents.isDestroyed()) {
-      bv.view.webContents.send(IpcChannel.BOTVIEW_SCREENSHOT, dataUrl);
-    }
+    this.sendToBotView(botId, IpcChannel.BOTVIEW_SCREENSHOT, dataUrl);
   }
 
   // ── Resize handling ───────────────────────────────────
