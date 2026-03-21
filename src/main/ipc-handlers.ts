@@ -41,6 +41,13 @@ export interface StartPayload {
   repeatRounds?: number;
 }
 
+/** Callbacks for drawer and overview window IPC handlers. */
+export interface UiHandlerDeps {
+  onDrawerToggle: (open: boolean) => void;
+  onOverviewToggle: (open: boolean) => void;
+  openOverviewWindow: () => Promise<void>;
+}
+
 /**
  * Register all IPC handlers for renderer → main commands.
  */
@@ -49,6 +56,7 @@ export function registerIpcHandlers(
   onStart: (payload: StartPayload) => Promise<void>,
   onRestart: () => Promise<void>,
   mainWindow: import('electron').BrowserWindow,
+  uiDeps: UiHandlerDeps,
 ): void {
   // ── CMD_START ─────────────────────────────────────────
   ipcMain.on(IpcChannel.CMD_START, (_event, payload: StartPayload) => {
@@ -101,7 +109,33 @@ export function registerIpcHandlers(
     detail?: Record<string, unknown>;
   }) => {
     diagRenderer(payload.botId, payload.index, payload.event, payload.detail);
-  });}
+  });
+
+  // ── CMD_OPEN_DRAWER ──────────────────────────────────────
+  ipcMain.on(IpcChannel.CMD_OPEN_DRAWER, (_event, payload: { id: string; index: number }) => {
+    log.debug('cmd:open-drawer received for %s', payload.id);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('open-drawer-for-bot', payload);
+    }
+  });
+
+  // ── CMD_DRAWER_TOGGLE ────────────────────────────────────
+  ipcMain.on(IpcChannel.CMD_DRAWER_TOGGLE, (_event, payload: { open: boolean }) => {
+    uiDeps.onDrawerToggle(payload.open);
+  });
+
+  // ── CMD_OPEN_OVERVIEW ────────────────────────────────────
+  ipcMain.on(IpcChannel.CMD_OPEN_OVERVIEW, () => {
+    void uiDeps.openOverviewWindow().catch((err) => {
+      log.error('Failed to open overview window: %s', err instanceof Error ? err.message : String(err));
+    });
+  });
+
+  // ── CMD_OVERVIEW_TOGGLE ──────────────────────────────────
+  ipcMain.on(IpcChannel.CMD_OVERVIEW_TOGGLE, (_event, payload: { open: boolean }) => {
+    uiDeps.onOverviewToggle(payload.open);
+  });
+}
 
 /**
  * Remove all IPC handlers (cleanup on quit).
@@ -113,7 +147,9 @@ export function removeIpcHandlers(): void {
   ipcMain.removeAllListeners(IpcChannel.CMD_PAUSE);
   ipcMain.removeAllListeners(IpcChannel.CMD_RESUME);
   ipcMain.removeAllListeners(IpcChannel.CMD_FOCUS);
+  ipcMain.removeAllListeners(IpcChannel.SCREENSHOT_DIAG);
   ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_DRAWER);
   ipcMain.removeAllListeners(IpcChannel.CMD_DRAWER_TOGGLE);
+  ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
   ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
 }

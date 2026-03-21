@@ -5,7 +5,7 @@
 // ──────────────────────────────────────────────────────────────
 
 import path from 'path';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { AppConfig, BotScript, DEFAULT_STRATEGY, DEFAULTS, BotStrategy, IpcChannel, isTerminalStatus, UrlInjectionConfig } from '../engine/types';
 import type { MessageCategory } from '../engine/message-bank';
 import { parseCLI } from './cli';
@@ -608,37 +608,21 @@ app.whenReady().then(async () => {
       }
     });
 
-    registerIpcHandlers(botRunner, handleStartRequest, handleRestartRequest, mainWindow);
-
-    // Forward open-drawer requests from BrowserView → main renderer
-    ipcMain.on(IpcChannel.CMD_OPEN_DRAWER, (_event, payload: { id: string; index: number }) => {
-      log.debug('cmd:open-drawer received for %s', payload.id);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('open-drawer-for-bot', payload);
-      }
-    });
-
-    // ── Drawer toggle — shrink grid to make room for the sidebar ──
-    ipcMain.on(IpcChannel.CMD_DRAWER_TOGGLE, (_event, payload: { open: boolean }) => {
-      const DRAWER_WIDTH = 380;           // must match .log-drawer width in CSS
-      gridManager.setDrawerOffset(payload.open ? DRAWER_WIDTH : 0);
-      if (currentPlayerCount > 0) {
-        scheduleGridRefresh('drawer-toggle');
-      }
-    });
-
-    ipcMain.on(IpcChannel.CMD_OPEN_OVERVIEW, () => {
-      void openOverviewWindow().catch((err) => {
-        log.error('Failed to open overview window: %s', err instanceof Error ? err.message : String(err));
-      });
-    });
-
-    // ── Overview toggle — hide native BrowserViews so DOM modal stays on top ──
-    ipcMain.on(IpcChannel.CMD_OVERVIEW_TOGGLE, (_event, payload: { open: boolean }) => {
-      gridManager.setViewsVisible(!payload.open);
-      if (!payload.open && currentPlayerCount > 0) {
-        scheduleGridRefresh('overview-close');
-      }
+    registerIpcHandlers(botRunner, handleStartRequest, handleRestartRequest, mainWindow, {
+      onDrawerToggle: (open: boolean) => {
+        const DRAWER_WIDTH = 380;           // must match .log-drawer width in CSS
+        gridManager.setDrawerOffset(open ? DRAWER_WIDTH : 0);
+        if (currentPlayerCount > 0) {
+          scheduleGridRefresh('drawer-toggle');
+        }
+      },
+      onOverviewToggle: (open: boolean) => {
+        gridManager.setViewsVisible(!open);
+        if (!open && currentPlayerCount > 0) {
+          scheduleGridRefresh('overview-close');
+        }
+      },
+      openOverviewWindow: () => openOverviewWindow(),
     });
 
     for (const event of ['resize', 'maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) {
@@ -663,10 +647,6 @@ app.on('window-all-closed', async () => {
   stopBudgetWatchdog();
   dropoutSimulator.clearAll();
   removeIpcHandlers();
-  ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_OVERVIEW);
-  ipcMain.removeAllListeners(IpcChannel.CMD_OVERVIEW_TOGGLE);
-  ipcMain.removeAllListeners(IpcChannel.CMD_OPEN_DRAWER);
-  ipcMain.removeAllListeners(IpcChannel.CMD_DRAWER_TOGGLE);
   if (registry) {
     await registry.destroyAll();
   }
