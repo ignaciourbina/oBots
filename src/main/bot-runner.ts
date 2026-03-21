@@ -21,6 +21,7 @@ import { StateMachineRunner, FSMCallbacks } from '../engine/state-machine';
 import { SessionRegistry } from './session-registry';
 import { createChildLogger } from './logger';
 import { GridManager } from './grid-manager';
+import { startScreencast, restartScreencast, stopScreencast } from './screencast';
 
 interface FocusSession {
   win: BrowserWindow;
@@ -361,23 +362,18 @@ export class BotRunner {
     // Start CDP screencast — real-time frame events from the browser
     const cdp = await bot.page.createCDPSession();
 
-    cdp.on('Page.screencastFrame', (params: { data: string; sessionId: number }) => {
-      if (!focusWin.isDestroyed()) {
-        focusWin.webContents.send(
-          IpcChannel.FOCUS_SCREENSHOT,
-          `data:image/jpeg;base64,${params.data}`,
-        );
-      }
-      // Acknowledge frame so CDP keeps sending
-      cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {});
-    });
-
-    await cdp.send('Page.startScreencast', {
-      format: 'jpeg',
+    const focusScreencastOpts = {
+      format: 'jpeg' as const,
       quality: 80,
       maxWidth: cw,
       maxHeight: ch,
       everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
+    };
+
+    await startScreencast(cdp, focusScreencastOpts, (dataUrl) => {
+      if (!focusWin.isDestroyed()) {
+        focusWin.webContents.send(IpcChannel.FOCUS_SCREENSHOT, dataUrl);
+      }
     });
 
     // Re-sync viewport + screencast when focus window is resized
@@ -388,14 +384,13 @@ export class BotRunner {
         if (focusWin.isDestroyed() || !bot.page) return;
         const [w, h] = focusWin.getContentSize();
         await bot.page.setViewport({ width: w, height: h });
-        await cdp.send('Page.stopScreencast').catch(() => {});
-        await cdp.send('Page.startScreencast', {
+        await restartScreencast(cdp, {
           format: 'jpeg',
           quality: 80,
           maxWidth: w,
           maxHeight: h,
           everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
-        }).catch(() => {});
+        });
       }, 200);
     });
 
@@ -408,8 +403,7 @@ export class BotRunner {
 
     focusWin.on('closed', () => {
       if (resizeTimer) clearTimeout(resizeTimer);
-      cdp.send('Page.stopScreencast').catch(() => {});
-      cdp.detach().catch(() => {});
+      void stopScreencast(cdp);
       this.focusSessions.delete(botId);
       // Restore original viewport
       bot.page?.setViewport({ width: origWidth, height: origHeight }).catch(() => {});
@@ -422,10 +416,9 @@ export class BotRunner {
    */
   async stopAll(): Promise<void> {
     // Stop all grid screencasts
-    for (const [botId, gs] of this.gridScreencasts) {
+    for (const [, gs] of this.gridScreencasts) {
       gs.active = false;
-      gs.cdp.send('Page.stopScreencast').catch(() => {});
-      gs.cdp.detach().catch(() => {});
+      void stopScreencast(gs.cdp);
     }
     this.gridScreencasts.clear();
 
@@ -436,8 +429,7 @@ export class BotRunner {
 
     // Close all focus windows and stop their screencasts
     for (const { win, cdp } of this.focusSessions.values()) {
-      cdp.send('Page.stopScreencast').catch(() => {});
-      cdp.detach().catch(() => {});
+      void stopScreencast(cdp);
       if (!win.isDestroyed()) win.close();
     }
     this.focusSessions.clear();
@@ -478,24 +470,15 @@ export class BotRunner {
     const gs: GridScreencast = { cdp, active: true };
     this.gridScreencasts.set(bot.id, gs);
 
-    cdp.on('Page.screencastFrame', (params: { data: string; sessionId: number }) => {
-      if (gs.active) {
-        this.gridManager?.sendScreenshot(
-          bot.id,
-          `data:image/jpeg;base64,${params.data}`,
-        );
-      }
-      // Acknowledge frame so CDP keeps sending
-      cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {});
-    });
-
-    await cdp.send('Page.startScreencast', {
-      format: 'jpeg',
-      quality: 60,       // lower quality for grid tiles (small)
-      maxWidth: scW,
-      maxHeight: scH,
-      everyNthFrame: DEFAULTS.screenshotEveryNthFrame,
-    });
+    await startScreencast(
+      cdp,
+      { format: 'jpeg', quality: 60, maxWidth: scW, maxHeight: scH, everyNthFrame: DEFAULTS.screenshotEveryNthFrame },
+      (dataUrl) => {
+        if (gs.active) {
+          this.gridManager?.sendScreenshot(bot.id, dataUrl);
+        }
+      },
+    );
 
     this.syslog.info('Grid screencast started for bot #%d (%s) — %d×%d',
       bot.index, bot.id, scW, scH);
@@ -516,8 +499,7 @@ export class BotRunner {
     const gs = this.gridScreencasts.get(botId);
     if (gs) {
       gs.active = false;
-      gs.cdp.send('Page.stopScreencast').catch(() => {});
-      gs.cdp.detach().catch(() => {});
+      void stopScreencast(gs.cdp);
       this.gridScreencasts.delete(botId);
       this.syslog.debug('Grid screencast stopped for %s', botId);
     }
