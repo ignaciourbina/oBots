@@ -421,6 +421,12 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'queueNextRound',
             guard: { type: 'custom', fn: QUEUE_NEXT_ROUND_GUARD },
           },
+          // StudyOverview PC-selector widget — needs a custom multi-step
+          // interaction (open grid → click PC button → click Next → confirm modal).
+          {
+            target: 'handlePCSelector',
+            guard: { type: 'elementExists', selector: '#pc-grid-trigger' },
+          },
           // named-button decision pages (e.g. <button name="cooperate" value="True">)
           // Must be checked before fillAndSubmit — named buttons act as both
           // the field input and the form submit, so no separate submit click is needed.
@@ -566,6 +572,62 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
           { type: 'log', value: `Clicking named form button (${strategy.name} strategy)...` },
           { type: 'clickNamedFormButton', strategyConfig: strategy },
           { type: 'wait', value: 200 },
+        ],
+        transitions: [
+          {
+            target: 'done',
+            guard: { type: 'urlContains', value: 'OutOfRangeNotification' },
+          },
+          {
+            target: 'done',
+            guard: { type: 'custom', fn: TERMINAL_PAGE_GUARD },
+          },
+          {
+            target: 'waitForPage',
+            guard: { type: 'elementExists', selector: 'body' },
+            delay: 200,
+          },
+        ],
+      },
+
+      // ── handlePCSelector ─────────────────────────────────
+      // Custom handler for the StudyOverview "Lab PC Number" widget.
+      // Sequence: open grid trigger → wait for async PC buttons →
+      //           click a random PC → click Next → confirm modal.
+      handlePCSelector: {
+        onEntry: [
+          { type: 'log', value: 'PC selector detected — running custom handler.' },
+          // 1. Click the trigger button to open the grid panel
+          { type: 'click', selector: '#pc-grid-trigger' },
+          // 2. Wait for grid buttons to load (async fetch), click a random one
+          { type: 'evaluate', value: `(async () => {
+            for (let i = 0; i < 20; i++) {
+              const cells = Array.from(document.querySelectorAll('button.pc-grid-cell'));
+              if (cells.length > 0) {
+                cells[Math.floor(Math.random() * cells.length)].click();
+                return;
+              }
+              await new Promise(r => setTimeout(r, 250));
+            }
+          })()` },
+          { type: 'wait', value: 500 },
+          // 3. Verify the hidden input was populated, then click Next
+          { type: 'evaluate', value: `(() => {
+            const inp = document.getElementById('id_PC_id_manual_input');
+            if (!inp || !inp.value.trim()) return;
+            const btn = document.querySelector('button.otree-btn-next') ||
+                        document.querySelector('.btn-primary') ||
+                        document.querySelector('button[type="submit"]');
+            if (btn) btn.click();
+          })()` },
+          { type: 'wait', value: 1000 },
+          // 4. Click confirm in the modal
+          { type: 'evaluate', value: `(() => {
+            const confirmBtn = document.getElementById('confirmPCConfirm');
+            if (confirmBtn) confirmBtn.click();
+          })()` },
+          { type: 'wait', value: 500 },
+          { type: 'log', value: 'PC handler complete.' },
         ],
         transitions: [
           {

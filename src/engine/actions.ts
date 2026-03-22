@@ -324,7 +324,18 @@ async function fillFormFieldsVisible(page: Page, strategy: BotStrategy): Promise
             case 'random': chosen = opts[Math.floor(Math.random() * opts.length)]; break;
           }
           const selSel = buildSelector(field);
-          await page.select(selSel, chosen);
+          // Force-set via evaluate so custom widgets (hidden <select>
+          // behind a JS overlay) react to the change event.
+          // page.select() only works on visible native selects;
+          // evaluate + dispatchEvent covers custom dropdown widgets.
+          await page.evaluate((sel, val) => {
+            const el = document.querySelector(sel) as HTMLSelectElement | null;
+            if (el) {
+              el.value = val;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, selSel, chosen);
           break;
         }
 
@@ -366,6 +377,45 @@ async function fillFormFieldsVisible(page: Page, strategy: BotStrategy): Promise
 
     // Visible delay between fields
     if (delayMs) await sleep(delayMs);
+  }
+
+  // ── Fallback: fill any empty form inputs + bypass confirmation ───
+  // Custom widgets (e.g. oTree PC-selector) hide the real <input> and
+  // manage it via JS.  The main loop may fail to type into hidden inputs.
+  // This single evaluate pass fills ALL empty named inputs in the form
+  // and pre-sets data-confirmed to bypass confirmation modals.
+  try {
+    await page.evaluate(() => {
+      const form = document.querySelector('form');
+      if (!form) return;
+
+      // Fill every empty named input (text, hidden, etc.)
+      form.querySelectorAll<HTMLInputElement>('input').forEach((inp) => {
+        if (inp.type === 'submit' || inp.type === 'button' || inp.type === 'checkbox' || inp.type === 'radio') return;
+        if (inp.name && !inp.value.trim()) {
+          inp.value = String(Math.floor(Math.random() * 28) + 1);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+
+      // Fill unfilled selects
+      form.querySelectorAll('select').forEach((el) => {
+        const sel = el as HTMLSelectElement;
+        if (sel.value && sel.selectedIndex > 0) return;
+        const validOpts = Array.from(sel.options).filter((o) => o.value !== '');
+        if (validOpts.length > 0) {
+          sel.value = validOpts[Math.floor(Math.random() * validOpts.length)].value;
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+
+      // Bypass confirmation modals (e.g. "Confirm your PC number")
+      form.dataset.confirmed = 'yes';
+    });
+  } catch {
+    // Fallback failed — continue to submit attempt
   }
 }
 
