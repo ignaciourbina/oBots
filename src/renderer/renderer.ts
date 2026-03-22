@@ -5,8 +5,18 @@
 // preload-exposed `window.oBots` API.
 // ──────────────────────────────────────────────────────────────
 
-import { escapeHtml } from './utils';
-import { isTerminalStatus, type BotStatus } from '../engine/types';
+// NOTE: renderer runs with nodeIntegration:false and contextIsolation:true.
+// No require() or import is available — all helpers must be defined inline.
+type BotStatus = 'idle' | 'running' | 'paused' | 'stale' | 'dropped' | 'done' | 'error';
+
+function isTerminalStatus(status: BotStatus): boolean {
+  return status === 'done' || status === 'dropped' || status === 'error';
+}
+
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, (c) => map[c] || c);
+}
 
 // Type declarations for the preload-exposed API
 interface OBotsApi {

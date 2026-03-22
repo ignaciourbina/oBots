@@ -4,7 +4,11 @@
 // for a single bot tile in the grid.
 // ──────────────────────────────────────────────────────────────
 
-import { escapeHtml } from './utils';
+// NOTE: renderer files run with nodeIntegration:false — no require() available.
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, (c) => map[c] || c);
+}
 
 /** Data required to create or update a bot card tile in the grid. */
 export interface BotCardData {
