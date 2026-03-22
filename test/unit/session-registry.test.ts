@@ -90,55 +90,6 @@ describe('SessionRegistry', () => {
     expect(registry.size).toBe(0);
   });
 
-  it('detects stale running bots using last state change timestamp', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-
-    try {
-      const registry = new SessionRegistry();
-      const stale = registry.createBot(0, makeScript());
-      const healthy = registry.createBot(1, makeScript());
-      const paused = registry.createBot(2, makeScript());
-
-      registry.updateStatus(stale.id, 'running');
-      registry.updateStatus(healthy.id, 'running');
-      registry.updateStatus(paused.id, 'paused');
-
-      vi.setSystemTime(new Date('2026-01-01T00:00:30.000Z'));
-      registry.updateCurrentState(healthy.id, 'still-running');
-
-      vi.setSystemTime(new Date('2026-01-01T00:01:05.000Z'));
-      const staleBots = registry.getStaleRunningBots(60_000);
-
-      expect(staleBots.map((bot) => bot.id)).toEqual([stale.id]);
-      expect(staleBots[0].lastStateChangeAt).toBe(
-        new Date('2026-01-01T00:00:00.000Z').getTime(),
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not refresh stale timer on self-transition to same state', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-
-    try {
-      const registry = new SessionRegistry();
-      const bot = registry.createBot(0, makeScript());
-      registry.updateStatus(bot.id, 'running');
-
-      vi.setSystemTime(new Date('2026-01-01T00:00:30.000Z'));
-      registry.updateCurrentState(bot.id, 'start');
-
-      vi.setSystemTime(new Date('2026-01-01T00:01:05.000Z'));
-      const staleBots = registry.getStaleRunningBots(60_000);
-      expect(staleBots.map((b) => b.id)).toEqual([bot.id]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('detects running bots that exceed max runtime', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));

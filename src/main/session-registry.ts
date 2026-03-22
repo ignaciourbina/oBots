@@ -84,8 +84,8 @@ export class SessionRegistry {
   updateCurrentState(id: string, state: string): void {
     const bot = this.bots.get(id);
     if (bot) {
-      // Only refresh stale-watchdog timestamp when state truly changes.
-      // Self-loops should still be considered stale after timeout.
+      // Track timestamp of last state change (diagnostics).
+      // Self-loops do not reset the timestamp.
       const changed = bot.currentState !== state;
       bot.currentState = state;
       if (changed) {
@@ -94,21 +94,7 @@ export class SessionRegistry {
     }
   }
 
-  /**
-   * Return running bots whose state has not changed within maxIdleMs.
-   */
-  getStaleRunningBots(maxIdleMs: number, nowMs: number = Date.now()): BotInstance[] {
-    const stale: BotInstance[] = [];
-    for (const bot of this.bots.values()) {
-      if (bot.status !== 'running') {
-        continue;
-      }
-      if ((nowMs - bot.lastStateChangeAt) >= maxIdleMs) {
-        stale.push(bot);
-      }
-    }
-    return stale;
-  }
+
 
   /**
    * Return running bots that exceeded maximum runtime budget.
