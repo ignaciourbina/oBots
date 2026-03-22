@@ -319,6 +319,9 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           staleProbability: Number(start.strategy.staleProbability) || 0,
           staleExtraDelayMs: Number(start.strategy.staleExtraDelayMs) || 0,
           dropProbability: Number(start.strategy.dropProbability) || 0,
+          customMessages: Array.isArray(start.strategy.customMessages)
+            ? start.strategy.customMessages.filter((m: unknown) => typeof m === 'string')
+            : undefined,
           messageBankCategories: Array.isArray(start.strategy.messageBankCategories)
             ? start.strategy.messageBankCategories as MessageCategory[]
             : undefined,

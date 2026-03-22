@@ -6,7 +6,7 @@
 
 import type { Page } from 'puppeteer';
 import { Action, BotStrategy, DEFAULTS, LogEntry } from './types';
-import { pickRandomMessage } from './message-bank';
+import { pickRandomCustomMessage, pickRandomMessage } from './message-bank';
 
 /** Utility: sleep for ms milliseconds */
 export function sleep(ms: number): Promise<void> {
@@ -297,7 +297,7 @@ async function fillFormFieldsVisible(page: Page, strategy: BotStrategy): Promise
         }
 
         case 'text': {
-          const textToType = pickRandomMessage(strategy.messageBankCategories ?? []) ?? strategy.textValue;
+          const textToType = pickRandomCustomMessage(strategy.customMessages) ?? pickRandomMessage(strategy.messageBankCategories ?? []) ?? strategy.textValue;
           const txtSel = buildSelector(field);
           await page.click(txtSel, { clickCount: 3 });
           if (delayMs) await sleep(delayMs / 2);
@@ -306,7 +306,7 @@ async function fillFormFieldsVisible(page: Page, strategy: BotStrategy): Promise
         }
 
         case 'textarea': {
-          const taTextToType = pickRandomMessage(strategy.messageBankCategories ?? []) ?? strategy.textValue;
+          const taTextToType = pickRandomCustomMessage(strategy.customMessages) ?? pickRandomMessage(strategy.messageBankCategories ?? []) ?? strategy.textValue;
           const taSel = buildSelector(field);
           await page.click(taSel);
           if (delayMs) await sleep(delayMs / 2);
