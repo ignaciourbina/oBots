@@ -10,6 +10,7 @@ import {
   MESSAGE_CATEGORY_LABELS,
   buildMessagePool,
   pickRandomMessage,
+  pickRandomCustomMessage,
   type MessageCategory,
 } from '../../src/engine/message-bank';
 
@@ -101,5 +102,30 @@ describe('pickRandomMessage', () => {
       expect(result).not.toBeNull();
       expect(allowedMessages).toContain(result);
     }
+  });
+});
+
+// ── pickRandomCustomMessage ─────────────────────────────────
+
+describe('pickRandomCustomMessage', () => {
+  it('returns null for empty array', () => {
+    expect(pickRandomCustomMessage([])).toBeNull();
+  });
+
+  it('returns null for undefined', () => {
+    expect(pickRandomCustomMessage(undefined)).toBeNull();
+  });
+
+  it('returns an element from the provided list', () => {
+    const messages = ['alpha', 'bravo', 'charlie'];
+    for (let i = 0; i < 50; i++) {
+      const result = pickRandomCustomMessage(messages);
+      expect(result).not.toBeNull();
+      expect(messages).toContain(result);
+    }
+  });
+
+  it('returns the only element when list has one item', () => {
+    expect(pickRandomCustomMessage(['solo'])).toBe('solo');
   });
 });

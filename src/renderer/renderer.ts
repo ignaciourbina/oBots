@@ -45,6 +45,7 @@ interface StrategyPayload {
   staleProbability: number;
   staleExtraDelayMs: number;
   dropProbability: number;
+  customMessages?: string[];
   messageBankCategories?: string[];
 }
 
@@ -152,6 +153,9 @@ const dropProbSlider = document.getElementById('drop-prob') as HTMLInputElement;
 const dropProbLabel = document.getElementById('drop-prob-label') as HTMLSpanElement;
 const msgBankEnabled = document.getElementById('msg-bank-enabled') as HTMLInputElement;
 const msgBankFields = document.getElementById('message-bank-fields') as HTMLDivElement;
+const customMsgEnabled = document.getElementById('custom-msg-enabled') as HTMLInputElement;
+const customMsgFields = document.getElementById('custom-msg-fields') as HTMLDivElement;
+const customMsgList = document.getElementById('custom-msg-list') as HTMLTextAreaElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
 const setupRepeatInput = document.getElementById('setup-repeat') as HTMLInputElement;
 
@@ -199,9 +203,12 @@ function applyPreset(key: string): void {
   staleDelayLabel.textContent = `${preset.staleExtraDelayMs} ms`;
   dropProbSlider.value = String(preset.dropProbability * 100);
   dropProbLabel.textContent = `${Math.round(preset.dropProbability * 100)}%`;
-  // Reset message bank (presets default to off)
+  // Reset message bank and custom messages (presets default to off)
   msgBankEnabled.checked = false;
   msgBankFields.classList.add('hidden');
+  customMsgEnabled.checked = false;
+  customMsgFields.classList.add('hidden');
+  customMsgList.value = '';
 }
 
 /** Read the full strategy object from the detail controls */
@@ -213,6 +220,12 @@ function readStrategy(): StrategyPayload {
   if (msgBankEnabled.checked) {
     const checked = msgBankFields.querySelectorAll<HTMLInputElement>('input[data-category]:checked');
     messageBankCategories = Array.from(checked).map((el) => el.dataset.category!);
+  }
+
+  let customMessages: string[] | undefined;
+  if (customMsgEnabled.checked) {
+    const lines = customMsgList.value.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+    if (lines.length > 0) customMessages = lines;
   }
 
   return {
@@ -229,6 +242,7 @@ function readStrategy(): StrategyPayload {
     staleProbability: (Number(staleProbSlider.value) || 0) / 100,
     staleExtraDelayMs: Number(staleDelaySlider.value) || 0,
     dropProbability: (Number(dropProbSlider.value) || 0) / 100,
+    customMessages,
     messageBankCategories,
   };
 }
@@ -396,9 +410,23 @@ function initializeSetupForm(): void {
     urlInjectionFields.classList.toggle('hidden', !setupUrlInjectionEnabled.checked);
   });
 
-  // Message bank toggle
+  // Message bank toggle (mutually exclusive with custom messages)
   msgBankEnabled.addEventListener('change', () => {
     msgBankFields.classList.toggle('hidden', !msgBankEnabled.checked);
+    if (msgBankEnabled.checked) {
+      customMsgEnabled.checked = false;
+      customMsgFields.classList.add('hidden');
+    }
+    setupStrategySelect.value = 'custom';
+  });
+
+  // Custom message list toggle (mutually exclusive with message bank)
+  customMsgEnabled.addEventListener('change', () => {
+    customMsgFields.classList.toggle('hidden', !customMsgEnabled.checked);
+    if (customMsgEnabled.checked) {
+      msgBankEnabled.checked = false;
+      msgBankFields.classList.add('hidden');
+    }
     setupStrategySelect.value = 'custom';
   });
 

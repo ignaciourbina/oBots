@@ -158,6 +158,18 @@
           </div>
         </div>
 
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="setup-card__check" for="custom-msg-enabled">
+            <input id="custom-msg-enabled" type="checkbox" />
+            Use custom message list
+          </label>
+          <span class="strategy-grid__hint">When enabled, bots pick a random message from your custom list below instead of using the static text value or message bank.</span>
+
+          <div id="custom-msg-fields" class="hidden" style="margin-top:8px">
+            <textarea id="custom-msg-list" class="setup-card__input" rows="5" placeholder="One message per line&#10;e.g.&#10;I cooperate&#10;I defect&#10;No comment" style="width:100%;resize:vertical;font-size:0.85rem"></textarea>
+          </div>
+        </div>
+
         <div class="strategy-grid__field strategy-grid__field--half">
           <label class="strategy-grid__label" for="strat-speed">Bot speed</label>
           <div class="speed-control">

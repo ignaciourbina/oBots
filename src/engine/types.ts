@@ -260,6 +260,8 @@ export interface BotStrategy {
   staleExtraDelayMs: number;
   /** Probability (0–1) that a stale bot drops out entirely (0 = never) */
   dropProbability: number;
+  /** User-defined custom messages to randomly sample for text/textarea fields (undefined = disabled) */
+  customMessages?: string[];
   /** Message bank categories to draw from for text/textarea fields (undefined = disabled) */
   messageBankCategories?: MessageCategory[];
 }

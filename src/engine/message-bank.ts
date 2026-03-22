@@ -88,3 +88,12 @@ export function pickRandomMessage(enabledCategories: readonly MessageCategory[])
   if (!pool) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
+
+/**
+ * Pick one random message from a user-defined custom list.
+ * Returns `null` if the list is empty or undefined (caller falls through to next source).
+ */
+export function pickRandomCustomMessage(messages: readonly string[] | undefined): string | null {
+  if (!messages || messages.length === 0) return null;
+  return messages[Math.floor(Math.random() * messages.length)];
+}

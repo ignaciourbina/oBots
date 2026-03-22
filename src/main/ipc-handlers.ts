@@ -28,6 +28,7 @@ export interface StrategyPayload {
   staleProbability: number;
   staleExtraDelayMs: number;
   dropProbability: number;
+  customMessages?: string[];
   messageBankCategories?: string[];
 }
 
