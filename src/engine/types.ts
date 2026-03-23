@@ -59,6 +59,7 @@ export type ActionType =
   | 'evaluate'
   | 'fillFormFields'
   | 'clickNamedFormButton'
+  | 'fillCarousel'
   | 'screenshot'
   | 'log';
 
@@ -228,6 +229,8 @@ export type SelectStrategy = 'first' | 'last' | 'random';
 export type RadioStrategy = 'first' | 'last' | 'random';
 /** How to handle checkboxes */
 export type CheckboxStrategy = 'all' | 'none' | 'random';
+/** How to navigate carousel slides */
+export type CarouselStrategy = 'sequential' | 'random' | 'first' | 'last';
 
 /**
  * A BotStrategy configures how the auto-player fills form fields.
@@ -248,6 +251,8 @@ export interface BotStrategy {
   radioStrategy: RadioStrategy;
   /** How to handle checkboxes */
   checkboxStrategy: CheckboxStrategy;
+  /** How to navigate carousel slides: 'sequential' visits all, 'random' picks one, 'first'/'last' picks an endpoint */
+  carouselStrategy: CarouselStrategy;
   /** Milliseconds to wait before clicking submit (0 = immediate) */
   submitDelay: number;
   /** Milliseconds to wait between each action / field interaction (0 = fast) */
@@ -276,6 +281,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     selectStrategy: 'random',
     radioStrategy: 'random',
     checkboxStrategy: 'random',
+    carouselStrategy: 'sequential',
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
@@ -291,6 +297,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     selectStrategy: 'first',
     radioStrategy: 'first',
     checkboxStrategy: 'none',
+    carouselStrategy: 'first',
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
@@ -306,6 +313,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     selectStrategy: 'last',
     radioStrategy: 'last',
     checkboxStrategy: 'all',
+    carouselStrategy: 'last',
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
@@ -321,6 +329,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     selectStrategy: 'first',
     radioStrategy: 'first',
     checkboxStrategy: 'all',
+    carouselStrategy: 'sequential',
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,
@@ -336,6 +345,7 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     selectStrategy: 'first',
     radioStrategy: 'first',
     checkboxStrategy: 'all',
+    carouselStrategy: 'sequential',
     submitDelay: 0,
     actionDelayMs: 300,
     actionJitterMs: 0,

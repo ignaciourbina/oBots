@@ -143,6 +143,14 @@ export async function executeAction(
       return null;
     }
 
+    // ── fillCarousel ────────────────────────────────────────
+    // Navigates carousel slides and fills form fields on each active slide.
+    case 'fillCarousel': {
+      if (!action.strategyConfig) throw new Error('fillCarousel requires strategyConfig');
+      await fillCarouselVisible(page, action.strategyConfig);
+      return null;
+    }
+
     // ── clickNamedFormButton ──────────────────────────────
     // Handles experiment decision pages that use <button name="field" value="x">
     // instead of <input type="radio">. Randomly selects a button per group
@@ -440,6 +448,139 @@ function buildSelector(field: { type: string; selector: string; meta: Record<str
 const CSS = globalThis.CSS ?? {
   escape: (s: string) => s.replace(/([^\w-])/g, '\\$1'),
 };
+
+// ── Carousel form-field filling ─────────────────────────────
+
+/** Info about a detected carousel on the page. */
+interface CarouselInfo {
+  containerSelector: string;
+  slideSelector: string;
+  nextSelector: string;
+  indicatorSelector: string;
+  slideCount: number;
+  hasNext: boolean;
+  hasIndicators: boolean;
+}
+
+/**
+ * Navigate carousel slides and fill form fields on each active slide.
+ * Detects common carousel libraries (Bootstrap, Splide, Swiper, Owl,
+ * Slick) and a generic `[data-carousel]` convention.
+ */
+async function fillCarouselVisible(page: Page, strategy: BotStrategy): Promise<void> {
+  const delayMs = strategy.actionDelayMs ?? 0;
+
+  // 1. Discover carousel structure via a single evaluate call
+  const carouselInfo: CarouselInfo | null = await page.evaluate(() => {
+    const patterns = [
+      {
+        container: '.carousel',
+        slide: '.carousel-item',
+        next: '.carousel-control-next, [data-bs-slide="next"], [data-slide="next"]',
+        indicators: '.carousel-indicators [data-bs-slide-to], .carousel-indicators [data-slide-to], .carousel-indicators button',
+      },
+      {
+        container: '.splide',
+        slide: '.splide__slide',
+        next: '.splide__arrow--next',
+        indicators: '.splide__pagination__page',
+      },
+      {
+        container: '.swiper',
+        slide: '.swiper-slide',
+        next: '.swiper-button-next',
+        indicators: '.swiper-pagination-bullet',
+      },
+      {
+        container: '.owl-carousel',
+        slide: '.owl-item',
+        next: '.owl-next',
+        indicators: '.owl-dot',
+      },
+      {
+        container: '.slick-slider',
+        slide: '.slick-slide:not(.slick-cloned)',
+        next: '.slick-next',
+        indicators: '.slick-dots button',
+      },
+      {
+        container: '[data-carousel]',
+        slide: '[data-slide]',
+        next: '[data-carousel-next]',
+        indicators: '[data-carousel-indicator]',
+      },
+    ];
+
+    for (const p of patterns) {
+      const container = document.querySelector(p.container);
+      if (!container) continue;
+      const slides = container.querySelectorAll(p.slide);
+      if (slides.length <= 1) continue;
+      // Only match if the carousel actually contains form fields
+      const hasFields = container.querySelector(
+        'input, select, textarea, button[name]:not(.otree-btn-next)',
+      );
+      if (!hasFields) continue;
+      return {
+        containerSelector: p.container,
+        slideSelector: p.slide,
+        nextSelector: p.next,
+        indicatorSelector: p.indicators,
+        slideCount: slides.length,
+        hasNext: !!container.querySelector(p.next),
+        hasIndicators: !!container.querySelector(p.indicators),
+      };
+    }
+    return null;
+  });
+
+  if (!carouselInfo) return; // No carousel found
+
+  // 2. Determine which slides to visit based on strategy
+  const allIndices = Array.from({ length: carouselInfo.slideCount }, (_, i) => i);
+  let targetIndices: number[];
+  switch (strategy.carouselStrategy) {
+    case 'sequential': targetIndices = allIndices; break;
+    case 'random':     targetIndices = [allIndices[Math.floor(Math.random() * allIndices.length)]]; break;
+    case 'first':      targetIndices = [0]; break;
+    case 'last':       targetIndices = [allIndices.length - 1]; break;
+  }
+
+  // 3. Navigate to each target slide and fill its fields
+  for (let ti = 0; ti < targetIndices.length; ti++) {
+    const slideIndex = targetIndices[ti];
+
+    // Navigate to the target slide
+    if (slideIndex > 0 || ti > 0) {
+      if (carouselInfo.hasIndicators) {
+        // Direct jump via indicator click
+        await page.evaluate(
+          (sel: string, idx: number) => {
+            const indicators = document.querySelectorAll(sel);
+            const target = indicators[idx] as HTMLElement | undefined;
+            if (target) target.click();
+          },
+          carouselInfo.indicatorSelector,
+          slideIndex,
+        );
+      } else if (carouselInfo.hasNext) {
+        // Sequential advance via next button
+        const clicksNeeded = ti === 0 ? slideIndex : 1;
+        for (let c = 0; c < clicksNeeded; c++) {
+          await page.click(carouselInfo.nextSelector);
+          await sleep(350); // animation settle between clicks
+        }
+      }
+      // Wait for slide transition animation to complete
+      await sleep(450);
+    }
+
+    // 4. Fill visible form fields on the now-active slide
+    await fillFormFieldsVisible(page, strategy);
+
+    if (delayMs) await sleep(delayMs);
+  }
+}
 
 // ── Named form button clicking ─────────────────────────────
 

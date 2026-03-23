@@ -45,6 +45,7 @@ interface StrategyPayload {
   staleProbability: number;
   staleExtraDelayMs: number;
   dropProbability: number;
+  carouselStrategy: string;
   customMessages?: string[];
   messageBankCategories?: string[];
 }
@@ -176,11 +177,11 @@ let runRequested = false;
  */
 /** Strategy presets — mirrors STRATEGY_PRESETS from types.ts */
 const PRESETS: Record<string, Omit<StrategyPayload, 'name'>> = {
-  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   carouselStrategy: 'first',      submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    carouselStrategy: 'last',       submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
 };
 
 /** Apply a preset's values to the strategy detail controls */
@@ -236,6 +237,7 @@ function readStrategy(): StrategyPayload {
     selectStrategy: stratSelectSelect.value,
     radioStrategy: stratRadioSelect.value,
     checkboxStrategy: stratCheckboxSelect.value,
+    carouselStrategy: 'sequential',
     submitDelay: 0,
     actionDelayMs: Number(stratSpeedSlider.value) || 0,
     actionJitterMs: Number(stratJitterSlider.value) || 0,

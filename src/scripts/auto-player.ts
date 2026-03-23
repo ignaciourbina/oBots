@@ -279,6 +279,32 @@ const HAS_FORM_FIELDS_GUARD = `(() => {
   return inputs.length > 0;
 })()`;
 
+// ── Carousel with form fields detection guard ───────────────
+// Detects multi-slide carousels (Bootstrap, Splide, Swiper, Owl, Slick,
+// or custom [data-carousel]) that contain form fields inside their slides.
+
+const HAS_CAROUSEL_FIELDS_GUARD = `(() => {
+  const selectors = [
+    { container: '.carousel',       slide: '.carousel-item' },
+    { container: '.splide',         slide: '.splide__slide' },
+    { container: '.swiper',         slide: '.swiper-slide' },
+    { container: '.owl-carousel',   slide: '.owl-item' },
+    { container: '.slick-slider',   slide: '.slick-slide:not(.slick-cloned)' },
+    { container: '[data-carousel]', slide: '[data-slide]' },
+  ];
+  for (const s of selectors) {
+    const container = document.querySelector(s.container);
+    if (!container) continue;
+    const slides = container.querySelectorAll(s.slide);
+    if (slides.length <= 1) continue;
+    const hasFields = container.querySelector(
+      'input, select, textarea, button[name]:not(.otree-btn-next)'
+    );
+    if (hasFields) return true;
+  }
+  return false;
+})()`;
+
 // ── Named-button form detection guard ───────────────────────
 // Detects decision pages that use <button name="field" value="x">
 // (e.g. "I choose Choice A / Choice B") instead of <input type="radio">.
@@ -416,6 +442,11 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: 'handleWaitPage',
             guard: { type: 'custom', fn: WAIT_PAGE_GUARD },
           },
+          // StartGate page — hardcoded experiment code + session letter
+          {
+            target: 'handleStartGate',
+            guard: { type: 'urlContains', value: 'app_consent_consolidated/StartGate' },
+          },
           // Queue for next round
           {
             target: 'queueNextRound',
@@ -426,6 +457,11 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
           {
             target: 'handlePCSelector',
             guard: { type: 'elementExists', selector: '#pc-grid-trigger' },
+          },
+          // Carousel pages with form fields across multiple slides
+          {
+            target: 'handleCarousel',
+            guard: { type: 'custom', fn: HAS_CAROUSEL_FIELDS_GUARD },
           },
           // named-button decision pages (e.g. <button name="cooperate" value="True">)
           // Must be checked before fillAndSubmit — named buttons act as both
@@ -590,6 +626,41 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
         ],
       },
 
+      // ── handleStartGate ──────────────────────────────────
+      // Hardcoded handler for the app_consent_consolidated StartGate page.
+      // Fills "Experiment code" = 42, "Session letter" = A, then submits.
+      handleStartGate: {
+        onEntry: [
+          { type: 'log', value: 'StartGate detected — filling experiment code (42) and session letter (A).' },
+          { type: 'evaluate', value: `(() => {
+            const form = document.querySelector('form');
+            if (!form) return;
+            const inputs = form.querySelectorAll('input:not([type="hidden"]):not([type="submit"])');
+            if (inputs[0]) {
+              inputs[0].value = '42';
+              inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+              inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (inputs[1]) {
+              inputs[1].value = 'A';
+              inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+              inputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          })()` },
+          { type: 'wait', value: 300 },
+        ],
+        transitions: [
+          {
+            target: 'clickNext',
+            guard: {
+              type: 'elementExists',
+              selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
+            },
+          },
+          { target: 'waitForPage', delay: 2000 },
+        ],
+      },
+
       // ── handlePCSelector ─────────────────────────────────
       // Custom handler for the StudyOverview "Lab PC Number" widget.
       // Sequence: open grid trigger → wait for async PC buttons →
@@ -643,6 +714,30 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             guard: { type: 'elementExists', selector: 'body' },
             delay: 200,
           },
+        ],
+      },
+
+      // ── handleCarousel ──────────────────────────────────
+      // Navigates carousel slides and fills form fields on each.
+      // After all target slides are filled, falls through to clickNext.
+      handleCarousel: {
+        onEntry: [
+          { type: 'log', value: `Carousel detected — filling slides (${strategy.name} strategy)...` },
+          { type: 'fillCarousel', strategyConfig: strategy },
+          { type: 'wait', value: 50 },
+          { type: 'log', value: 'Carousel fields filled.' },
+          ...submitDelayAction,
+        ],
+        transitions: [
+          {
+            target: 'clickNext',
+            guard: {
+              type: 'elementExists',
+              selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
+            },
+          },
+          // Fallback if submit button not found — re-evaluate page state
+          { target: 'waitForPage', delay: 2000 },
         ],
       },
 
