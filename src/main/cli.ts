@@ -115,5 +115,6 @@ export function parseCLI(argv?: string[]): AppConfig {
     debug: args.verbose as boolean,
     devtools: args.devtools as boolean,
     strategy,
+    botMaxRuntimeMs: DEFAULTS.botMaxRuntimeMs,
   };
 }

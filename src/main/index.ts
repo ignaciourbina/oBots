@@ -16,6 +16,7 @@ import { registerIpcHandlers, removeIpcHandlers, StartPayload, StrategyPayload }
 import { createChildLogger, setVerbose, getLogPath } from './logger';
 import { createAutoPlayer } from '../scripts/auto-player';
 import { DropoutSimulator } from './dropout-simulator';
+import { attachContextMenu } from './context-menu';
 
 const log = createChildLogger('main');
 
@@ -51,6 +52,8 @@ let repeatTotalRounds = 1;
 let lastRunConfig: AppConfig | null = null;
 let isRepeating = false;
 let budgetWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+/** Active runtime budget (ms). 0 = no limit. Set from runConfig each run. */
+let activeBotMaxRuntimeMs: number = DEFAULTS.botMaxRuntimeMs;
 const dropoutSimulator = new DropoutSimulator();
 
 interface OverviewSnapshot {
@@ -88,6 +91,8 @@ async function createWindow(config: AppConfig): Promise<BrowserWindow> {
       preload: preloadPath,
     },
   });
+
+  attachContextMenu(win.webContents);
 
   // Attach console listener BEFORE loading the page so we catch
   // every message including preload and renderer startup.
@@ -178,6 +183,7 @@ function normalizeStartPayload(payload: StartPayload): StartPayload {
     urlInjection: payload.urlInjection,
     playerCount,
     dropoutRatePercent,
+    botMaxRuntimeMs: payload.botMaxRuntimeMs,
     strategy: payload.strategy,
     repeatRounds: payload.repeatRounds,
   };
@@ -320,6 +326,9 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
           staleExtraDelayMs: Number(start.strategy.staleExtraDelayMs) || 0,
           dropProbability: Number(start.strategy.dropProbability) || 0,
           carouselStrategy: (start.strategy.carouselStrategy as BotStrategy['carouselStrategy']) ?? 'sequential',
+          realisticTiming: !!start.strategy.realisticTiming,
+          readingWpmMin: Number(start.strategy.readingWpmMin) || 100,
+          readingWpmMax: Number(start.strategy.readingWpmMax) || 250,
           customMessages: Array.isArray(start.strategy.customMessages)
             ? start.strategy.customMessages.filter((m: unknown) => typeof m === 'string')
             : undefined,
@@ -334,8 +343,12 @@ async function handleStartRequest(payload: StartPayload): Promise<void> {
       urlInjection: start.urlInjection,
       playerCount: start.playerCount,
       dropoutRatePercent: start.dropoutRatePercent ?? baseConfig.dropoutRatePercent,
+      botMaxRuntimeMs: start.botMaxRuntimeMs ?? baseConfig.botMaxRuntimeMs,
       strategy,
     };
+
+    // Store active runtime budget for the watchdog
+    activeBotMaxRuntimeMs = runConfig.botMaxRuntimeMs;
 
     // Repeat rounds setup
     repeatTotalRounds = Math.max(1, Number(start.repeatRounds) || 1);
@@ -443,9 +456,13 @@ function checkRuntimeBudget(): void {
   if (!runStarted || runStarting || currentPlayerCount <= 0) {
     return;
   }
+  // 0 = no limit
+  if (activeBotMaxRuntimeMs <= 0) {
+    return;
+  }
 
   const now = Date.now();
-  const overdueBots = registry.getOverdueRunningBots(DEFAULTS.botMaxRuntimeMs, now);
+  const overdueBots = registry.getOverdueRunningBots(activeBotMaxRuntimeMs, now);
   for (const bot of overdueBots) {
     const runtimeMs = now - bot.createdAt;
     const runtimeSec = Math.round(runtimeMs / 1000);
@@ -457,7 +474,7 @@ function checkRuntimeBudget(): void {
     );
     botRunner.forceFinishBot(
       bot.id,
-      `runtime budget exceeded at ${runtimeSec}s (timeout ${Math.round(DEFAULTS.botMaxRuntimeMs / 1000)}s)`,
+      `runtime budget exceeded at ${runtimeSec}s (timeout ${Math.round(activeBotMaxRuntimeMs / 1000)}s)`,
       'dropped',
     );
   }
@@ -561,6 +578,7 @@ async function openOverviewWindow(): Promise<void> {
     },
   });
   overviewWindow.setMenu(null);
+  attachContextMenu(overviewWindow.webContents);
 
   const htmlPath = path.join(__dirname, '..', 'renderer', 'overview.html');
   await overviewWindow.loadFile(htmlPath);

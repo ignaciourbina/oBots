@@ -121,10 +121,13 @@ export class StateMachineRunner {
       for (const action of stateDef.onEntry) {
         if (this._status !== 'running') return; // check between actions
 
-        // Log every action execution to the system logger
-        const actionDesc = action.selector
-          ? `${action.type}(${action.selector}${action.value != null ? ', ' + JSON.stringify(action.value) : ''})`
-          : `${action.type}${action.value != null ? '(' + JSON.stringify(action.value) + ')' : ''}`;
+        // Log every action execution to the system logger.
+        // Prefer the human-readable label when available.
+        const actionDesc = action.label
+          ? `${action.type}: ${action.label}`
+          : action.selector
+            ? `${action.type}(${action.selector})`
+            : `${action.type}`;
         this.callbacks.onLog(this.botId, {
           timestamp: Date.now(),
           level: 'info',

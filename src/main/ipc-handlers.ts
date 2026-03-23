@@ -29,6 +29,9 @@ export interface StrategyPayload {
   staleExtraDelayMs: number;
   dropProbability: number;
   carouselStrategy: string;
+  realisticTiming?: boolean;
+  readingWpmMin?: number;
+  readingWpmMax?: number;
   customMessages?: string[];
   messageBankCategories?: string[];
 }
@@ -39,6 +42,7 @@ export interface StartPayload {
   urlInjection?: UrlInjectionConfig;
   playerCount: number;
   dropoutRatePercent?: number;
+  botMaxRuntimeMs?: number;
   strategy?: StrategyPayload;
   repeatRounds?: number;
 }

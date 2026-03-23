@@ -400,6 +400,11 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
     ? [{ type: 'wait' as const, value: strategy.submitDelay }]
     : [];
 
+  // When realistic timing is on, action states are reached via the
+  // readingPage intermediate state; otherwise they're targeted directly.
+  const rt = strategy.realisticTiming;
+  const r = (target: string) => rt ? 'readingPage' : target;
+
   return {
     name: `Auto-Player (${strategy.name})`,
     initialState: 'navigate',
@@ -421,8 +426,8 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // ── waitForPage ─────────────────────────────────────
       waitForPage: {
         onEntry: [
-          { type: 'evaluate', value: CLEAR_WAIT_PAGE_MARKERS },
-          { type: 'waitForSelector', selector: 'body', timeout: 10000 },
+          { type: 'evaluate', value: CLEAR_WAIT_PAGE_MARKERS, label: 'Clear wait-page session markers' },
+          { type: 'waitForSelector', selector: 'body', timeout: 10000, label: 'Wait for page body' },
           { type: 'log', value: 'Page loaded.' },
           { type: 'wait', value: 50 },
         ],
@@ -444,40 +449,40 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
           },
           // StartGate page — hardcoded experiment code + session letter
           {
-            target: 'handleStartGate',
+            target: r('handleStartGate'),
             guard: { type: 'urlContains', value: 'app_consent_consolidated/StartGate' },
           },
           // Queue for next round
           {
-            target: 'queueNextRound',
+            target: r('queueNextRound'),
             guard: { type: 'custom', fn: QUEUE_NEXT_ROUND_GUARD },
           },
           // StudyOverview PC-selector widget — needs a custom multi-step
           // interaction (open grid → click PC button → click Next → confirm modal).
           {
-            target: 'handlePCSelector',
+            target: r('handlePCSelector'),
             guard: { type: 'elementExists', selector: '#pc-grid-trigger' },
           },
           // Carousel pages with form fields across multiple slides
           {
-            target: 'handleCarousel',
+            target: r('handleCarousel'),
             guard: { type: 'custom', fn: HAS_CAROUSEL_FIELDS_GUARD },
           },
           // named-button decision pages (e.g. <button name="cooperate" value="True">)
           // Must be checked before fillAndSubmit — named buttons act as both
           // the field input and the form submit, so no separate submit click is needed.
           {
-            target: 'clickNamedButton',
+            target: r('clickNamedButton'),
             guard: { type: 'custom', fn: HAS_NAMED_BUTTONS_GUARD },
           },
           // Form page — fill fields
           {
-            target: 'fillAndSubmit',
+            target: r('fillAndSubmit'),
             guard: { type: 'custom', fn: HAS_FORM_FIELDS_GUARD },
           },
           // Submit button only (results page, etc.)
           {
-            target: 'clickNext',
+            target: r('clickNext'),
             guard: {
               type: 'elementExists',
               selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
@@ -488,6 +493,68 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
         ],
       },
 
+      // ── readingPage (conditional) ────────────────────────
+      // Intermediate state that pauses to simulate reading before
+      // re-evaluating which action state to enter. Only present
+      // when realisticTiming is enabled. The bot's displayed state
+      // shows "readingPage" so the operator can see it reading.
+      ...(rt ? {
+        readingPage: {
+          onEntry: [
+            // Wait for the page to fully paint so the CDP screencast
+            // captures a rendered frame before the reading sleep.
+            { type: 'waitForSelector' as const, selector: 'body', timeout: 5000, label: 'Wait for page render' },
+            { type: 'wait' as const, value: 300 },
+            { type: 'readingDelay' as const, strategyConfig: strategy, label: 'Compute reading delay from page word count' },
+          ],
+          transitions: [
+            // Re-evaluate the same page-type guards as waitForPage
+            // to route to the correct action state after the delay.
+            {
+              target: 'done',
+              guard: { type: 'urlContains' as const, value: 'OutOfRangeNotification' },
+            },
+            {
+              target: 'done',
+              guard: { type: 'custom' as const, fn: TERMINAL_PAGE_GUARD },
+            },
+            {
+              target: 'handleStartGate',
+              guard: { type: 'urlContains' as const, value: 'app_consent_consolidated/StartGate' },
+            },
+            {
+              target: 'queueNextRound',
+              guard: { type: 'custom' as const, fn: QUEUE_NEXT_ROUND_GUARD },
+            },
+            {
+              target: 'handlePCSelector',
+              guard: { type: 'elementExists' as const, selector: '#pc-grid-trigger' },
+            },
+            {
+              target: 'handleCarousel',
+              guard: { type: 'custom' as const, fn: HAS_CAROUSEL_FIELDS_GUARD },
+            },
+            {
+              target: 'clickNamedButton',
+              guard: { type: 'custom' as const, fn: HAS_NAMED_BUTTONS_GUARD },
+            },
+            {
+              target: 'fillAndSubmit',
+              guard: { type: 'custom' as const, fn: HAS_FORM_FIELDS_GUARD },
+            },
+            {
+              target: 'clickNext',
+              guard: {
+                type: 'elementExists' as const,
+                selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
+              },
+            },
+            // Fallback — page changed during reading, re-evaluate
+            { target: 'waitForPage', delay: 200 },
+          ],
+        },
+      } : {}),
+
       // ── handleWaitPage ──────────────────────────────────
       // Do NOT reload — WaitPages use built-in JS polling
       // (waitForRedirect) that auto-redirects when the group is ready.
@@ -495,7 +562,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       handleWaitPage: {
         onEntry: [
           { type: 'log', value: 'Detected WaitPage — waiting for other players…' },
-          { type: 'evaluate', value: WAIT_PAGE_NUDGE_ACTION },
+          { type: 'evaluate', value: WAIT_PAGE_NUDGE_ACTION, label: 'Nudge wait-page polling hooks' },
           { type: 'wait', value: 3000 },
         ],
         transitions: [
@@ -542,7 +609,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       recoverWaitPage: {
         onEntry: [
           { type: 'log', value: 'WaitPage appears stuck at full readiness — refreshing once.' },
-          { type: 'evaluate', value: MARK_WAIT_PAGE_RECOVERY },
+          { type: 'evaluate', value: MARK_WAIT_PAGE_RECOVERY, label: 'Mark wait-page as recovered' },
           { type: 'reload', timeout: 10000 },
           { type: 'wait', value: 1200 },
         ],
@@ -558,7 +625,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       recoverWaitPageStale: {
         onEntry: [
           { type: 'log', value: 'WaitPage readiness unchanged for 25s — refreshing to resync.' },
-          { type: 'evaluate', value: MARK_WAIT_PAGE_STALE_RECOVERY },
+          { type: 'evaluate', value: MARK_WAIT_PAGE_STALE_RECOVERY, label: 'Mark stale wait-page recovery' },
           { type: 'reload', timeout: 10000 },
           { type: 'wait', value: 1200 },
         ],
@@ -572,10 +639,12 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
 
       // ── queueNextRound ──────────────────────────────────
       queueNextRound: {
+
         onEntry: [
           { type: 'log', value: 'Queueing for next round...' },
           {
             type: 'clickAndNavigate',
+            label: 'Click submit for next round',
             selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
             timeout: 5000,
           },
@@ -604,9 +673,10 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // Clicking one of these buttons both sets the field value and
       // submits the form, so no separate "clickNext" step is needed.
       clickNamedButton: {
+
         onEntry: [
           { type: 'log', value: `Clicking named form button (${strategy.name} strategy)...` },
-          { type: 'clickNamedFormButton', strategyConfig: strategy },
+          { type: 'clickNamedFormButton', strategyConfig: strategy, label: 'Click named decision button' },
           { type: 'wait', value: 200 },
         ],
         transitions: [
@@ -630,9 +700,10 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // Hardcoded handler for the app_consent_consolidated StartGate page.
       // Fills "Experiment code" = 42, "Session letter" = A, then submits.
       handleStartGate: {
+
         onEntry: [
           { type: 'log', value: 'StartGate detected — filling experiment code (42) and session letter (A).' },
-          { type: 'evaluate', value: `(() => {
+          { type: 'evaluate', label: 'Fill experiment code = 42, session letter = A', value: `(() => {
             const form = document.querySelector('form');
             if (!form) return;
             const inputs = form.querySelectorAll('input:not([type="hidden"]):not([type="submit"])');
@@ -666,12 +737,13 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // Sequence: open grid trigger → wait for async PC buttons →
       //           click a random PC → click Next → confirm modal.
       handlePCSelector: {
+
         onEntry: [
           { type: 'log', value: 'PC selector detected — running custom handler.' },
           // 1. Click the trigger button to open the grid panel
-          { type: 'click', selector: '#pc-grid-trigger' },
+          { type: 'click', selector: '#pc-grid-trigger', label: 'Open PC grid panel' },
           // 2. Wait for grid buttons to load (async fetch), click a random one
-          { type: 'evaluate', value: `(async () => {
+          { type: 'evaluate', label: 'Pick a random PC from grid', value: `(async () => {
             for (let i = 0; i < 20; i++) {
               const cells = Array.from(document.querySelectorAll('button.pc-grid-cell'));
               if (cells.length > 0) {
@@ -683,7 +755,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
           })()` },
           { type: 'wait', value: 500 },
           // 3. Verify the hidden input was populated, then click Next
-          { type: 'evaluate', value: `(() => {
+          { type: 'evaluate', label: 'Verify PC selection and click Next', value: `(() => {
             const inp = document.getElementById('id_PC_id_manual_input');
             if (!inp || !inp.value.trim()) return;
             const btn = document.querySelector('button.otree-btn-next') ||
@@ -693,7 +765,7 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
           })()` },
           { type: 'wait', value: 1000 },
           // 4. Click confirm in the modal
-          { type: 'evaluate', value: `(() => {
+          { type: 'evaluate', label: 'Confirm PC selection modal', value: `(() => {
             const confirmBtn = document.getElementById('confirmPCConfirm');
             if (confirmBtn) confirmBtn.click();
           })()` },
@@ -721,9 +793,10 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
       // Navigates carousel slides and fills form fields on each.
       // After all target slides are filled, falls through to clickNext.
       handleCarousel: {
+
         onEntry: [
           { type: 'log', value: `Carousel detected — filling slides (${strategy.name} strategy)...` },
-          { type: 'fillCarousel', strategyConfig: strategy },
+          { type: 'fillCarousel', strategyConfig: strategy, label: 'Navigate carousel slides and fill fields' },
           { type: 'wait', value: 50 },
           { type: 'log', value: 'Carousel fields filled.' },
           ...submitDelayAction,
@@ -743,11 +816,12 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
 
       // ── fillAndSubmit ───────────────────────────────────
       fillAndSubmit: {
+
         onEntry: [
           { type: 'log', value: `Filling form fields (${strategy.name} strategy)...` },
 
           // Fill all form fields using visible Puppeteer interactions
-          { type: 'fillFormFields', strategyConfig: strategy },
+          { type: 'fillFormFields', strategyConfig: strategy, label: 'Auto-fill form fields' },
 
           { type: 'wait', value: 50 },
           { type: 'log', value: 'Form filled.' },
@@ -770,10 +844,12 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
 
       // ── clickNext ───────────────────────────────────────
       clickNext: {
+
         onEntry: [
           { type: 'log', value: 'Clicking next...' },
           {
             type: 'clickAndNavigate',
+            label: 'Click Next / Submit',
             selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
             timeout: 5000,
           },

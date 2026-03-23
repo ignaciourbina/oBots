@@ -60,6 +60,7 @@ export type ActionType =
   | 'fillFormFields'
   | 'clickNamedFormButton'
   | 'fillCarousel'
+  | 'readingDelay'
   | 'screenshot'
   | 'log';
 
@@ -74,6 +75,8 @@ export interface Action {
   timeout?: number;
   /** Strategy config (for fillFormFields) */
   strategyConfig?: BotStrategy;
+  /** Human-readable label for logging (used instead of raw value/selector) */
+  label?: string;
 }
 
 export type GuardType =
@@ -265,6 +268,12 @@ export interface BotStrategy {
   staleExtraDelayMs: number;
   /** Probability (0–1) that a stale bot drops out entirely (0 = never) */
   dropProbability: number;
+  /** Enable realistic reading-delay mode: bots pause proportionally to page word count before interacting */
+  realisticTiming: boolean;
+  /** Minimum reading speed in words-per-minute (slow end of the range). Default: 100 */
+  readingWpmMin: number;
+  /** Maximum reading speed in words-per-minute (fast end of the range). Default: 250 */
+  readingWpmMax: number;
   /** User-defined custom messages to randomly sample for text/textarea fields (undefined = disabled) */
   customMessages?: string[];
   /** Message bank categories to draw from for text/textarea fields (undefined = disabled) */
@@ -288,6 +297,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     staleProbability: 0,
     staleExtraDelayMs: 0,
     dropProbability: 0,
+    realisticTiming: false,
+    readingWpmMin: 100,
+    readingWpmMax: 250,
   },
   minimum: {
     name: 'Minimum',
@@ -304,6 +316,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     staleProbability: 0,
     staleExtraDelayMs: 0,
     dropProbability: 0,
+    realisticTiming: false,
+    readingWpmMin: 100,
+    readingWpmMax: 250,
   },
   maximum: {
     name: 'Maximum',
@@ -320,6 +335,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     staleProbability: 0,
     staleExtraDelayMs: 0,
     dropProbability: 0,
+    realisticTiming: false,
+    readingWpmMin: 100,
+    readingWpmMax: 250,
   },
   midpoint: {
     name: 'Midpoint',
@@ -336,6 +354,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     staleProbability: 0,
     staleExtraDelayMs: 0,
     dropProbability: 0,
+    realisticTiming: false,
+    readingWpmMin: 100,
+    readingWpmMax: 250,
   },
   fixed: {
     name: 'Fixed (5)',
@@ -352,6 +373,9 @@ export const STRATEGY_PRESETS: Record<string, BotStrategy> = {
     staleProbability: 0,
     staleExtraDelayMs: 0,
     dropProbability: 0,
+    realisticTiming: false,
+    readingWpmMin: 100,
+    readingWpmMax: 250,
   },
 };
 
@@ -374,6 +398,8 @@ export interface AppConfig {
   debug: boolean;
   devtools: boolean;
   strategy: BotStrategy;
+  /** Max runtime in ms before a bot is force-dropped (0 = no limit). */
+  botMaxRuntimeMs: number;
 }
 
 export interface UrlInjectionConfig {

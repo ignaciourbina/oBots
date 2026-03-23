@@ -61,6 +61,12 @@
         Randomly force-stop this percentage of bots at random times during each run (0 = disabled).
       </span>
 
+      <label class="setup-card__label" for="setup-runtime-budget">Runtime budget (seconds)</label>
+      <input id="setup-runtime-budget" class="setup-card__input" type="number" min="0" step="30" value="300" />
+      <span class="strategy-grid__hint" style="display:block; margin-top:-2px;">
+        Force-drop bots that exceed this time limit (0 = no limit).
+      </span>
+
       <label class="setup-card__label" for="setup-strategy">Strategy preset</label>
       <select id="setup-strategy" class="setup-card__input">
         <option value="random">Random</option>
@@ -185,6 +191,27 @@
             <span id="strat-jitter-label" class="speed-control__label">0 ms</span>
           </div>
           <span class="strategy-grid__hint">Random +delay added per action for human-like timing (0 = deterministic)</span>
+        </div>
+      </div>
+
+      <!-- Realistic timing -->
+      <div class="strategy-grid" style="margin-top:8px">
+        <div class="strategy-grid__field strategy-grid__field--full">
+          <label class="setup-card__check" for="realistic-timing-enabled">
+            <input id="realistic-timing-enabled" type="checkbox" />
+            Realistic timing mode
+          </label>
+          <span class="strategy-grid__hint">Bots pause to "read" each page before interacting — delay is proportional to the word count on the page.</span>
+        </div>
+        <div id="realistic-timing-fields" class="hidden" style="display:flex;gap:16px;width:100%">
+          <div class="strategy-grid__field strategy-grid__field--half">
+            <label class="strategy-grid__label" for="reading-wpm-min">Min reading speed (WPM)</label>
+            <input id="reading-wpm-min" type="number" class="setup-card__input" value="100" min="50" max="500" step="10" />
+          </div>
+          <div class="strategy-grid__field strategy-grid__field--half">
+            <label class="strategy-grid__label" for="reading-wpm-max">Max reading speed (WPM)</label>
+            <input id="reading-wpm-max" type="number" class="setup-card__input" value="250" min="50" max="500" step="10" />
+          </div>
         </div>
       </div>
 

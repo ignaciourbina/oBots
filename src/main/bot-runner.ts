@@ -23,6 +23,7 @@ import { createChildLogger } from './logger';
 import { GridManager } from './grid-manager';
 import { startScreencast, restartScreencast, stopScreencast } from './screencast';
 import { BotSession } from './bot-session';
+import { attachContextMenu } from './context-menu';
 
 const RETRIABLE_NAVIGATION_ERROR_TOKENS = [
   'ERR_CONNECTION_REFUSED',
@@ -180,8 +181,9 @@ export class BotRunner {
         });
         // Forward to grid BrowserView
         this.gridManager?.sendBotState(botId, newState);
-        // Forward to focus window if open
-        this.sessions.get(botId)?.sendToFocus(IpcChannel.FOCUS_BOT_STATE, newState);
+        // Forward to focus window if open (include current URL for metadata display)
+        const pageUrl = bot.page?.url() ?? '';
+        this.sessions.get(botId)?.sendToFocus(IpcChannel.FOCUS_BOT_STATE, { state: newState, url: pageUrl });
       },
       onLog: (botId, entry) => {
         this.syslog[entry.level]('Bot %s: %s', botId, entry.message);
@@ -341,6 +343,7 @@ export class BotRunner {
     });
     // Remove menu entirely so it can't be toggled with Alt
     focusWin.setMenu(null);
+    attachContextMenu(focusWin.webContents);
 
     const htmlPath = path.join(__dirname, '..', 'renderer', 'focus.html');
     await focusWin.loadFile(htmlPath);
@@ -351,6 +354,7 @@ export class BotRunner {
       index: bot.index,
       status: bot.status,
       currentState: bot.currentState,
+      url: bot.page?.url() ?? '',
       logs: bot.logs,
     });
 

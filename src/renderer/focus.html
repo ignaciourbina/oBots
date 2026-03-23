@@ -64,6 +64,22 @@
       letter-spacing: 0.5px;
     }
 
+    .focus-bar__participant {
+      font-size: 12px;
+      color: #888;
+      font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      letter-spacing: 0.03em;
+    }
+
+    .focus-bar__participant-id {
+      color: #ffab40;
+    }
+
+    .focus-bar__sep {
+      color: #333;
+      margin: 0 2px;
+    }
+
     .focus-bar__state {
       font-size: 12px;
       color: #888;
@@ -228,6 +244,7 @@
       <span class="focus-bar__dot" id="status-dot"></span>
       <span class="focus-bar__label" id="bot-label">Bot #?</span>
       <span class="focus-bar__status" id="bot-status">idle</span>
+      <span class="focus-bar__participant" id="participant-info"></span>
       <span class="focus-bar__state" id="bot-state"></span>
       <button class="focus-bar__btn" id="btn-pause">⏸ Pause</button>
       <button class="focus-bar__btn" id="btn-resume" disabled>▶ Resume</button>
@@ -272,7 +289,24 @@
     let logsOpen = false;
     let lastFrameUrl = null;
 
+    const participantInfo = document.getElementById('participant-info');
     const api = window.focusApi;
+
+    /** Extract participant code from an oTree URL like /p/95ebabl5/... */
+    function parseParticipantId(url) {
+      if (!url) return null;
+      const match = url.match(/\/p\/([a-z0-9]+)\//i);
+      return match ? match[1] : null;
+    }
+
+    function updateParticipantId(url) {
+      const pid = parseParticipantId(url);
+      if (pid) {
+        participantInfo.innerHTML =
+          '<span class="focus-bar__sep">·</span> ' +
+          'p/<span class="focus-bar__participant-id">' + escapeHtml(pid) + '</span>';
+      }
+    }
 
     function fmtTime(ts) {
       const d = new Date(ts);
@@ -374,6 +408,7 @@
         botLabel.textContent = 'Bot #' + info.index;
         setStatus(info.status);
         setState(info.currentState);
+        updateParticipantId(info.url);
         document.title = 'Focus — Bot #' + info.index;
 
         // Backfill existing log entries
@@ -394,10 +429,11 @@
         setStatus(status);
       });
 
-      // FSM state changes
-      api.onBotState((state) => {
-        setState(state);
-        appendLogEntry({ timestamp: Date.now(), level: 'state', message: 'State → ' + state });
+      // FSM state changes (includes current page URL)
+      api.onBotState((data) => {
+        setState(data.state);
+        updateParticipantId(data.url);
+        appendLogEntry({ timestamp: Date.now(), level: 'state', message: 'State → ' + data.state });
       });
     }
   </script>

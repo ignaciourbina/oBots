@@ -46,6 +46,9 @@ interface StrategyPayload {
   staleExtraDelayMs: number;
   dropProbability: number;
   carouselStrategy: string;
+  realisticTiming?: boolean;
+  readingWpmMin?: number;
+  readingWpmMax?: number;
   customMessages?: string[];
   messageBankCategories?: string[];
 }
@@ -55,6 +58,7 @@ interface StartCommandPayload {
   urlInjection?: UrlInjectionPayload;
   playerCount: number;
   dropoutRatePercent: number;
+  botMaxRuntimeMs: number;
   strategy: StrategyPayload;
   repeatRounds: number;
 }
@@ -134,6 +138,7 @@ const setupAssignmentTemplate = document.getElementById('setup-assignment-templa
 const setupProjectTemplate = document.getElementById('setup-project-template') as HTMLInputElement;
 const setupPlayersInput = document.getElementById('setup-players') as HTMLInputElement;
 const setupDropoutRateInput = document.getElementById('setup-dropout-rate') as HTMLInputElement;
+const setupRuntimeBudgetInput = document.getElementById('setup-runtime-budget') as HTMLInputElement;
 const setupStrategySelect = document.getElementById('setup-strategy') as HTMLSelectElement;
 const strategyDetails = document.getElementById('strategy-details') as HTMLDivElement;
 const stratNumberSelect = document.getElementById('strat-number') as HTMLSelectElement;
@@ -157,6 +162,10 @@ const msgBankFields = document.getElementById('message-bank-fields') as HTMLDivE
 const customMsgEnabled = document.getElementById('custom-msg-enabled') as HTMLInputElement;
 const customMsgFields = document.getElementById('custom-msg-fields') as HTMLDivElement;
 const customMsgList = document.getElementById('custom-msg-list') as HTMLTextAreaElement;
+const realisticTimingCheckbox = document.getElementById('realistic-timing-enabled') as HTMLInputElement;
+const realisticTimingFields = document.getElementById('realistic-timing-fields') as HTMLDivElement;
+const readingWpmMinInput = document.getElementById('reading-wpm-min') as HTMLInputElement;
+const readingWpmMaxInput = document.getElementById('reading-wpm-max') as HTMLInputElement;
 const setupError = document.getElementById('setup-error') as HTMLParagraphElement;
 const setupRepeatInput = document.getElementById('setup-repeat') as HTMLInputElement;
 
@@ -177,11 +186,11 @@ let runRequested = false;
  */
 /** Strategy presets — mirrors STRATEGY_PRESETS from types.ts */
 const PRESETS: Record<string, Omit<StrategyPayload, 'name'>> = {
-  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   carouselStrategy: 'first',      submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    carouselStrategy: 'last',       submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
-  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0 },
+  random:   { numberStrategy: 'random',   numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'random', radioStrategy: 'random', checkboxStrategy: 'random', carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0, realisticTiming: false, readingWpmMin: 100, readingWpmMax: 250 },
+  minimum:  { numberStrategy: 'min',      numberFixedValue: 0,   textValue: 'a',             selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'none',   carouselStrategy: 'first',      submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0, realisticTiming: false, readingWpmMin: 100, readingWpmMax: 250 },
+  maximum:  { numberStrategy: 'max',      numberFixedValue: 100, textValue: 'test response',  selectStrategy: 'last',   radioStrategy: 'last',   checkboxStrategy: 'all',    carouselStrategy: 'last',       submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0, realisticTiming: false, readingWpmMin: 100, readingWpmMax: 250 },
+  midpoint: { numberStrategy: 'midpoint', numberFixedValue: 50,  textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0, realisticTiming: false, readingWpmMin: 100, readingWpmMax: 250 },
+  fixed:    { numberStrategy: 'fixed',    numberFixedValue: 5,   textValue: 'test',          selectStrategy: 'first',  radioStrategy: 'first',  checkboxStrategy: 'all',    carouselStrategy: 'sequential', submitDelay: 0, actionDelayMs: 300, actionJitterMs: 0, staleProbability: 0, staleExtraDelayMs: 0, dropProbability: 0, realisticTiming: false, readingWpmMin: 100, readingWpmMax: 250 },
 };
 
 /** Apply a preset's values to the strategy detail controls */
@@ -204,6 +213,11 @@ function applyPreset(key: string): void {
   staleDelayLabel.textContent = `${preset.staleExtraDelayMs} ms`;
   dropProbSlider.value = String(preset.dropProbability * 100);
   dropProbLabel.textContent = `${Math.round(preset.dropProbability * 100)}%`;
+  // Reset realistic timing (presets default to off)
+  realisticTimingCheckbox.checked = false;
+  realisticTimingFields.classList.add('hidden');
+  readingWpmMinInput.value = '100';
+  readingWpmMaxInput.value = '250';
   // Reset message bank and custom messages (presets default to off)
   msgBankEnabled.checked = false;
   msgBankFields.classList.add('hidden');
@@ -244,6 +258,9 @@ function readStrategy(): StrategyPayload {
     staleProbability: (Number(staleProbSlider.value) || 0) / 100,
     staleExtraDelayMs: Number(staleDelaySlider.value) || 0,
     dropProbability: (Number(dropProbSlider.value) || 0) / 100,
+    realisticTiming: realisticTimingCheckbox.checked,
+    readingWpmMin: Number(readingWpmMinInput.value) || 100,
+    readingWpmMax: Number(readingWpmMaxInput.value) || 250,
     customMessages,
     messageBankCategories,
   };
@@ -346,6 +363,7 @@ function readSetupPayload(): StartCommandPayload | null {
     urlInjection,
     playerCount,
     dropoutRatePercent,
+    botMaxRuntimeMs: (Number(setupRuntimeBudgetInput.value) || 0) * 1000,
     strategy: readStrategy(),
     repeatRounds: Number(setupRepeatInput.value) || 1,
   };
@@ -429,6 +447,12 @@ function initializeSetupForm(): void {
       msgBankEnabled.checked = false;
       msgBankFields.classList.add('hidden');
     }
+    setupStrategySelect.value = 'custom';
+  });
+
+  // Realistic timing toggle
+  realisticTimingCheckbox.addEventListener('change', () => {
+    realisticTimingFields.classList.toggle('hidden', !realisticTimingCheckbox.checked);
     setupStrategySelect.value = 'custom';
   });
 

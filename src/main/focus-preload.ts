@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('focusApi', {
   },
 
   // One-time bot identity + existing logs (sent right after window loads)
-  onBotInfo: (cb: (info: { id: string; index: number; status: string; currentState: string; logs: unknown[] }) => void) => {
+  onBotInfo: (cb: (info: { id: string; index: number; status: string; currentState: string; url: string; logs: unknown[] }) => void) => {
     ipcRenderer.on('focus:bot-info', (_event, info) => cb(info));
   },
 
@@ -28,9 +28,9 @@ contextBridge.exposeInMainWorld('focusApi', {
     ipcRenderer.on('focus:bot-status', (_event, status: string) => cb(status));
   },
 
-  // FSM state change
-  onBotState: (cb: (state: string) => void) => {
-    ipcRenderer.on('focus:bot-state', (_event, state: string) => cb(state));
+  // FSM state change (includes current page URL)
+  onBotState: (cb: (data: { state: string; url: string }) => void) => {
+    ipcRenderer.on('focus:bot-state', (_event, data) => cb(data));
   },
 
   // Commands back to main

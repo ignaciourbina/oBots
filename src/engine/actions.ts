@@ -151,6 +151,14 @@ export async function executeAction(
       return null;
     }
 
+    // ── readingDelay ─────────────────────────────────────────
+    // Counts visible words on the page, computes a reading-speed delay,
+    // logs the estimated reading time, and sleeps.
+    case 'readingDelay': {
+      if (!action.strategyConfig) throw new Error('readingDelay requires strategyConfig');
+      return await readingDelayVisible(page, action.strategyConfig, delayMultiplier);
+    }
+
     // ── clickNamedFormButton ──────────────────────────────
     // Handles experiment decision pages that use <button name="field" value="x">
     // instead of <input type="radio">. Randomly selects a button per group
@@ -448,6 +456,54 @@ function buildSelector(field: { type: string; selector: string; meta: Record<str
 const CSS = globalThis.CSS ?? {
   escape: (s: string) => s.replace(/([^\w-])/g, '\\$1'),
 };
+
+// ── Reading delay ───────────────────────────────────────────
+
+/**
+ * Count visible words on the page, pick a random reading speed,
+ * compute the estimated reading time, log it, and sleep.
+ * Returns a LogEntry surfacing the reading estimate to the user.
+ */
+async function readingDelayVisible(
+  page: Page,
+  strategy: BotStrategy,
+  delayMultiplier: number,
+): Promise<LogEntry | null> {
+  if (!strategy.realisticTiming) return null;
+
+  try {
+    const wordCount: number = await page.evaluate(() => {
+      const text = document.body?.innerText ?? '';
+      return text.split(/\s+/).filter((w: string) => w.length > 0).length;
+    });
+    if (wordCount <= 0) return null;
+
+    const minWpm = strategy.readingWpmMin ?? 100;
+    const maxWpm = strategy.readingWpmMax ?? 250;
+    // Triangular distribution: average of two uniforms peaks at the midpoint
+    const r = (Math.random() + Math.random()) / 2;
+    const wpm = minWpm + r * (maxWpm - minWpm);
+    // Square-root scaling: people skim long pages, they don't read every word.
+    // sqrt(wordCount) grows slowly so a 500-word page ≈ 22 "effective words"
+    // instead of 500, producing ~5-8s instead of ~2-3 minutes.
+    const effectiveWords = Math.sqrt(wordCount) * 5;
+    const rawMs = (effectiveWords / wpm) * 60_000 * delayMultiplier;
+    // Clamp to [500ms, 30s]
+    const delayMs = Math.max(500, Math.min(30_000, rawMs));
+    const delaySec = Math.round(delayMs / 1000);
+
+    const entry: LogEntry = {
+      timestamp: Date.now(),
+      level: 'info',
+      message: `Reading page — ${wordCount} words, ${Math.round(wpm)} WPM, ~${delaySec}s`,
+    };
+
+    await sleep(delayMs);
+    return entry;
+  } catch {
+    return null; // page navigating or other error
+  }
+}
 
 // ── Carousel form-field filling ─────────────────────────────
 
