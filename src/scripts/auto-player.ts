@@ -452,6 +452,11 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             target: r('handleStartGate'),
             guard: { type: 'urlContains', value: 'app_consent_consolidated/StartGate' },
           },
+          // SyncGate page — hardcoded sync code
+          {
+            target: r('handleSyncGate'),
+            guard: { type: 'urlContains', value: 'sync_gate/SyncGate' },
+          },
           // Queue for next round
           {
             target: r('queueNextRound'),
@@ -521,6 +526,10 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
             {
               target: 'handleStartGate',
               guard: { type: 'urlContains' as const, value: 'app_consent_consolidated/StartGate' },
+            },
+            {
+              target: 'handleSyncGate',
+              guard: { type: 'urlContains' as const, value: 'sync_gate/SyncGate' },
             },
             {
               target: 'queueNextRound',
@@ -716,6 +725,37 @@ export function createAutoPlayer(strategy: BotStrategy = DEFAULT_STRATEGY): BotS
               inputs[1].value = 'A';
               inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
               inputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          })()` },
+          { type: 'wait', value: 300 },
+        ],
+        transitions: [
+          {
+            target: 'clickNext',
+            guard: {
+              type: 'elementExists',
+              selector: 'button.otree-btn-next, .btn-primary, button[type="submit"]',
+            },
+          },
+          { target: 'waitForPage', delay: 2000 },
+        ],
+      },
+
+      // ── handleSyncGate ────────────────────────────────────
+      // Hardcoded handler for the sync_gate SyncGate page.
+      // Fills the sync code input = 33, then submits.
+      handleSyncGate: {
+
+        onEntry: [
+          { type: 'log', value: 'SyncGate detected — filling sync code (33).' },
+          { type: 'evaluate', label: 'Fill sync code = 33', value: `(() => {
+            const form = document.querySelector('form');
+            if (!form) return;
+            const inputs = form.querySelectorAll('input:not([type="hidden"]):not([type="submit"])');
+            if (inputs[0]) {
+              inputs[0].value = '33';
+              inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+              inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
             }
           })()` },
           { type: 'wait', value: 300 },
